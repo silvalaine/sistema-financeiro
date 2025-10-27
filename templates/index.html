@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-gradient text-white rounded p-5 mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <h1 class="display-4">Sistema Financeiro Doméstico</h1>
+            <p class="lead">Gerencie suas receitas e despesas de forma simples e eficiente</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Total Receitas</h4>
+                        <h2 id="total-receitas">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-arrow-up fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Total Despesas</h4>
+                        <h2 id="total-despesas">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-arrow-down fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Saldo Atual</h4>
+                        <h2 id="saldo-atual">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-wallet fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-plus-circle me-2"></i>Últimas Receitas</h5>
+            </div>
+            <div class="card-body">
+                <div id="ultimas-receitas">
+                    <p class="text-muted">Nenhuma receita registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-minus-circle me-2"></i>Últimas Despesas</h5>
+            </div>
+            <div class="card-body">
+                <div id="ultimas-despesas">
+                    <p class="text-muted">Nenhuma despesa registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <a href="{{ url_for('receitas') }}" class="btn btn-success btn-lg me-3">
+            <i class="fas fa-plus me-2"></i>Adicionar Receita
+        </a>
+        <a href="{{ url_for('despesas') }}" class="btn btn-danger btn-lg me-3">
+            <i class="fas fa-minus me-2"></i>Adicionar Despesa
+        </a>
+        <a href="{{ url_for('relatorios') }}" class="btn btn-info btn-lg">
+            <i class="fas fa-chart-bar me-2"></i>Ver Relatórios
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    carregarResumo();
+});
+
+function carregarResumo() {
+    fetch('/api/relatorios/resumo')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('total-receitas').textContent = formatarMoeda(data.total_receitas);
+            document.getElementById('total-despesas').textContent = formatarMoeda(data.total_despesas);
+            document.getElementById('saldo-atual').textContent = formatarMoeda(data.saldo_atual);
+            
+            // Atualizar cor do saldo baseado no valor
+            const saldoElement = document.getElementById('saldo-atual').parentElement.parentElement.parentElement;
+            if (data.saldo_atual >= 0) {
+                saldoElement.className = 'card text-white bg-info h-100';
+            } else {
+                saldoElement.className = 'card text-white bg-warning h-100';
+            }
+            
+            // Mostrar últimas receitas
+            const ultimasReceitasDiv = document.getElementById('ultimas-receitas');
+            if (data.ultimas_receitas.length > 0) {
+                ultimasReceitasDiv.innerHTML = data.ultimas_receitas.map(receita => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${receita.descricao}</strong><br>
+                            <small class="text-muted">${receita.categoria} - ${receita.data}</small>
+                        </div>
+                        <span class="badge bg-success">${formatarMoeda(receita.valor)}</span>
+                    </div>`
+                ).join('');
+            } else {
+                ultimasReceitasDiv.innerHTML = '<p class="text-muted">Nenhuma receita registrada ainda.</p>';
+            }
+            
+            // Mostrar últimas despesas
+            const ultimasDespesasDiv = document.getElementById('ultimas-despesas');
+            if (data.ultimas_despesas.length > 0) {
+                ultimasDespesasDiv.innerHTML = data.ultimas_despesas.map(despesa => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${despesa.descricao}</strong><br>
+                            <small class="text-muted">${despesa.categoria} - ${despesa.data}</small>
+                        </div>
+                        <span class="badge bg-danger">${formatarMoeda(despesa.valor)}</span>
+                    </div>`
+                ).join('');
+            } else {
+                ultimasDespesasDiv.innerHTML = '<p class="text-muted">Nenhuma despesa registrada ainda.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar resumo:', error);
+        });
+}
+
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
+}
+</script>
+{% endblock %}

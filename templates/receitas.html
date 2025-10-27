@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-plus-circle me-2"></i>Receitas</h2>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalReceita">
+                <i class="fas fa-plus me-2"></i>Nova Receita
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                                <th>Data</th>
+                                <th>Categoria</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-receitas">
+                            {% for receita in receitas %}
+                            <tr>
+                                <td>{{ receita.descricao }}</td>
+                                <td class="text-success fw-bold">R$ {{ "%.2f"|format(receita.valor) }}</td>
+                                <td>{{ receita.data.strftime('%d/%m/%Y') }}</td>
+                                <td><span class="badge bg-primary">{{ receita.categoria }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="deletarReceita({{ receita.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Nova Receita -->
+<div class="modal fade" id="modalReceita" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nova Receita</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formReceita">
+                    <div class="mb-3">
+                        <label for="descricaoReceita" class="form-label">Descrição</label>
+                        <input type="text" class="form-control" id="descricaoReceita" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valorReceita" class="form-label">Valor</label>
+                        <input type="number" class="form-control" id="valorReceita" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dataReceita" class="form-label">Data</label>
+                        <input type="date" class="form-control" id="dataReceita" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="categoriaReceita" class="form-label">Categoria</label>
+                        <select class="form-select" id="categoriaReceita" required>
+                            <option value="">Selecione uma categoria</option>
+                            <option value="Salário">Salário</option>
+                            <option value="Freelance">Freelance</option>
+                            <option value="Investimentos">Investimentos</option>
+                            <option value="Vendas">Vendas</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarReceita()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Definir data atual como padrão
+    document.getElementById('dataReceita').value = new Date().toISOString().split('T')[0];
+});
+
+function salvarReceita() {
+    const descricao = document.getElementById('descricaoReceita').value;
+    const valor = document.getElementById('valorReceita').value;
+    const data = document.getElementById('dataReceita').value;
+    const categoria = document.getElementById('categoriaReceita').value;
+    
+    if (!descricao || !valor || !data || !categoria) {
+        alert('Por favor, preencha todos os campos.');
+        return;
+    }
+    
+    const dados = {
+        descricao: descricao,
+        valor: parseFloat(valor),
+        data: data,
+        categoria: categoria
+    };
+    
+    fetch('/api/receita', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar receita.');
+    });
+}
+
+function deletarReceita(id) {
+    if (confirm('Tem certeza que deseja deletar esta receita?')) {
+        fetch(`/api/receita/${id}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao deletar receita.');
+        });
+    }
+}
+</script>
+{% endblock %}

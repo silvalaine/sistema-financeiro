@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-minus-circle me-2"></i>Despesas</h2>
+            <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalDespesa">
+                <i class="fas fa-plus me-2"></i>Nova Despesa
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                                <th>Data</th>
+                                <th>Categoria</th>
+                                <th>Subcategoria</th>
+                                <th>Tipo de Pagamento</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-despesas">
+                            {% for despesa in despesas %}
+                            <tr>
+                                <td>
+                                    {{ despesa.descricao }}
+                                    {% if despesa.parcelas > 1 %}
+                                    <br><small class="text-muted">Parcela {{ despesa.parcela_atual }}/{{ despesa.parcelas }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-danger fw-bold">
+                                    R$ {{ "%.2f"|format(despesa.valor) }}
+                                    {% if despesa.parcelas > 1 %}
+                                    <br><small class="text-muted">Total: R$ {{ "%.2f"|format(despesa.valor * despesa.parcelas) }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ despesa.data.strftime('%d/%m/%Y') }}</td>
+                                <td><span class="badge bg-secondary">{{ despesa.categoria }}</span></td>
+                                <td>{% if despesa.subcategoria %}<span class="badge bg-info text-dark">{{ despesa.subcategoria }}</span>{% else %}-{% endif %}</td>
+                                <td>{% if despesa.tipo_pagamento %}<span class="badge bg-primary">{{ despesa.tipo_pagamento.nome }}</span>{% else %}-{% endif %}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="deletarDespesa({{ despesa.id }}, {{ despesa.compra_parcelada_id if despesa.compra_parcelada_id else 'null' }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Nova Despesa -->
+<div class="modal fade" id="modalDespesa" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nova Despesa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formDespesa">
+                    <div class="mb-3">
+                        <label for="descricaoDespesa" class="form-label">Descrição</label>
+                        <input type="text" class="form-control" id="descricaoDespesa" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valorDespesa" class="form-label">Valor</label>
+                        <input type="number" class="form-control" id="valorDespesa" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dataDespesa" class="form-label">Data</label>
+                        <input type="date" class="form-control" id="dataDespesa" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="categoriaDespesa" class="form-label">Categoria</label>
+                        <select class="form-select" id="categoriaDespesa" required>
+                            <option value="">Selecione uma categoria</option>
+                            {% for categoria in categorias %}
+                            <option value="{{ categoria.id }}" data-nome="{{ categoria.nome }}">{{ categoria.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="subcategoriaDespesa" class="form-label">Subcategoria</label>
+                        <select class="form-select" id="subcategoriaDespesa">
+                            <option value="">Selecione uma subcategoria</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tipoPagamentoDespesa" class="form-label">Tipo de Pagamento</label>
+                        <select class="form-select" id="tipoPagamentoDespesa">
+                            <option value="">Selecione o tipo de pagamento</option>
+                            {% for tipo in tipos_pagamento %}
+                            {% if tipo.ativo %}
+                            <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="parcelamentoDespesa" class="form-label">Parcelamento</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="parcelamentoDespesa" min="1" max="48" value="1">
+                            <span class="input-group-text">parcela(s)</span>
+                        </div>
+                        <small class="text-muted">Deixe 1 para pagamento à vista</small>
+                    </div>
+
+                    <div id="infoParcelamento" class="alert alert-info d-none">
+                        <small>
+                            <span id="valorParcela"></span><br>
+                            <span id="datasParcelas"></span>
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="salvarDespesa()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Definir data atual como padrão
+    document.getElementById('dataDespesa').value = new Date().toISOString().split('T')[0];
+    // Quando categoria mudar, carregar subcategorias
+    const categoriaSelect = document.getElementById('categoriaDespesa');
+    const subcategoriaSelect = document.getElementById('subcategoriaDespesa');
+    if (categoriaSelect) {
+        categoriaSelect.addEventListener('change', function() {
+            const categoriaId = this.value;
+            // limpar opções
+            subcategoriaSelect.innerHTML = '<option value="">Selecione uma subcategoria</option>';
+            if (!categoriaId) return;
+            fetch(`/api/subcategorias/${categoriaId}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        data.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.nome || s.id;
+                            opt.textContent = s.nome;
+                            subcategoriaSelect.appendChild(opt);
+                        });
+                    }
+                })
+                .catch(err => console.error('Erro ao obter subcategorias:', err));
+        });
+    }
+});
+
+// Função para atualizar informações do parcelamento
+function atualizarInfoParcelamento() {
+    const valor = parseFloat(document.getElementById('valorDespesa').value) || 0;
+    const parcelas = parseInt(document.getElementById('parcelamentoDespesa').value) || 1;
+    const dataInicial = document.getElementById('dataDespesa').value;
+    const infoDiv = document.getElementById('infoParcelamento');
+    
+    if (parcelas > 1 && valor > 0 && dataInicial) {
+        const valorParcela = valor / parcelas;
+        const dataInicialObj = new Date(dataInicial);
+        
+        // Formatar primeira e última data
+        const dataFinalObj = new Date(dataInicialObj);
+        dataFinalObj.setMonth(dataFinalObj.getMonth() + parcelas - 1);
+        
+        const formatarData = (data) => data.toLocaleDateString('pt-BR');
+        
+        document.getElementById('valorParcela').textContent = 
+            `Valor por parcela: ${valorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+        document.getElementById('datasParcelas').textContent = 
+            `Período: ${formatarData(dataInicialObj)} até ${formatarData(dataFinalObj)}`;
+        
+        infoDiv.classList.remove('d-none');
+    } else {
+        infoDiv.classList.add('d-none');
+    }
+}
+
+// Adicionar event listeners para atualização do parcelamento
+document.addEventListener('DOMContentLoaded', function() {
+    const parcelamentoInput = document.getElementById('parcelamentoDespesa');
+    const valorInput = document.getElementById('valorDespesa');
+    const dataInput = document.getElementById('dataDespesa');
+
+    // Definir data atual como padrão
+    dataInput.value = new Date().toISOString().split('T')[0];
+
+    // Atualizar info do parcelamento quando os valores mudarem
+    [parcelamentoInput, valorInput, dataInput].forEach(input => {
+        input.addEventListener('input', atualizarInfoParcelamento);
+    });
+
+    // Quando categoria mudar, carregar subcategorias
+    const categoriaSelect = document.getElementById('categoriaDespesa');
+    const subcategoriaSelect = document.getElementById('subcategoriaDespesa');
+    if (categoriaSelect) {
+        categoriaSelect.addEventListener('change', function() {
+            const categoriaId = this.value;
+            // limpar opções
+            subcategoriaSelect.innerHTML = '<option value="">Selecione uma subcategoria</option>';
+            if (!categoriaId) return;
+            fetch(`/api/subcategorias/${categoriaId}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        data.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.nome || s.id;
+                            opt.textContent = s.nome;
+                            subcategoriaSelect.appendChild(opt);
+                        });
+                    }
+                })
+                .catch(err => console.error('Erro ao obter subcategorias:', err));
+        });
+    }
+});
+
+function salvarDespesa() {
+    const descricao = document.getElementById('descricaoDespesa').value;
+    const valor = document.getElementById('valorDespesa').value;
+    const data = document.getElementById('dataDespesa').value;
+    const categoriaSelect = document.getElementById('categoriaDespesa');
+    const categoria = categoriaSelect.value;
+    const categoriaNome = categoriaSelect.options[categoriaSelect.selectedIndex]?.dataset?.nome || categoriaSelect.options[categoriaSelect.selectedIndex]?.text;
+    const subcategoria = document.getElementById('subcategoriaDespesa').value;
+    const parcelas = parseInt(document.getElementById('parcelamentoDespesa').value) || 1;
+
+    if (!descricao || !valor || !data || !categoria) {
+        alert('Por favor, preencha todos os campos obrigatórios.');
+        return;
+    }
+    
+    const dados = {
+        descricao: descricao,
+        valor: parseFloat(valor),
+        data: data,
+        categoria: categoriaNome,
+        subcategoria: subcategoria || null,
+        tipo_pagamento_id: document.getElementById('tipoPagamentoDespesa').value || null,
+        parcelas: parcelas
+    };
+    
+    fetch('/api/despesa', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar despesa.');
+    });
+}
+
+function deletarDespesa(id, compraParceladaId) {
+    let mensagem = 'Tem certeza que deseja deletar esta despesa?';
+    if (compraParceladaId) {
+        mensagem = 'Esta é uma compra parcelada. Deseja deletar:\n\n' +
+                  '1 - Apenas esta parcela\n' +
+                  '2 - Todas as parcelas futuras\n' +
+                  '3 - Todas as parcelas da compra\n\n' +
+                  'Digite 1, 2 ou 3:';
+        
+        const opcao = prompt(mensagem);
+        if (!opcao || !['1', '2', '3'].includes(opcao)) {
+            return;
+        }
+        
+        // Adicionar a opção à URL
+        const url = `/api/despesa/${id}?opcao_delete=${opcao}&compra_parcelada_id=${compraParceladaId}`;
+        
+        fetch(url, { method: 'DELETE' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao deletar despesa.');
+            });
+    } else {
+        // Despesa normal (não parcelada)
+        if (confirm(mensagem)) {
+            fetch(`/api/despesa/${id}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Erro: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao deletar despesa.');
+                });
+        }
+    }
+}
+</script>
+{% endblock %}

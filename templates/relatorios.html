@@ -1,0 +1,480 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-chart-bar me-2"></i>Relatórios</h2>
+                <p class="text-muted">Visualize análises detalhadas das suas finanças</p>
+            </div>
+            <div>
+                <button class="btn btn-danger" onclick="gerarPDF(event)">
+                    <i class="fas fa-file-pdf me-2"></i>Gerar PDF
+                </button>
+                <button class="btn btn-secondary" onclick="imprimirRelatorio()">
+                    <i class="fas fa-print me-2"></i>Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Total Receitas</h4>
+                        <h2 id="total-receitas-relatorio">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-arrow-up fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Total Despesas</h4>
+                        <h2 id="total-despesas-relatorio">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-arrow-down fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Saldo Atual</h4>
+                        <h2 id="saldo-atual-relatorio">R$ 0,00</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-wallet fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-body p-2">
+                    <form class="d-flex flex-wrap align-items-center gap-2" onsubmit="event.preventDefault(); carregarRelatorios();">
+                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                            <span class="input-group-text">Categoria</span>
+                            <select id="filtroCategoria" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                                {% for categoria in categorias %}
+                                <option value="{{ categoria.nome }}" data-id="{{ categoria.id }}">{{ categoria.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                            <span class="input-group-text">Subcategoria</span>
+                            <select id="filtroSubcategoria" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                            <span class="input-group-text">Início</span>
+                            <input type="date" id="filtroDataInicio" class="form-control form-control-sm">
+                        </div>
+
+                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                            <span class="input-group-text">Fim</span>
+                            <input type="date" id="filtroDataFim" class="form-control form-control-sm">
+                        </div>
+
+                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                            <span class="input-group-text">Pagamento</span>
+                            <select id="filtroTipoPagamento" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                {% for tipo in tipos_pagamento %}
+                                {% if tipo.ativo %}
+                                <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="btn-group">
+                            <button type="submit" class="btn btn-sm btn-primary" id="btnAplicarFiltro">
+                                <i class="fas fa-filter me-1"></i>Aplicar
+                            </button>
+                            <button type="button" class="btn btn-sm btn-light border" id="btnLimparFiltro">
+                                <i class="fas fa-eraser me-1"></i>Limpar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie me-2"></i>Receitas por Categoria</h5>
+            </div>
+            <div class="card-body">
+                <div id="receitas-categoria">
+                    <p class="text-muted">Nenhuma receita registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie me-2"></i>Despesas por Categoria</h5>
+            </div>
+            <div class="card-body">
+                <div id="despesas-categoria">
+                    <p class="text-muted">Nenhuma despesa registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list me-2"></i>Últimas Receitas</h5>
+            </div>
+            <div class="card-body">
+                <div id="ultimas-receitas-relatorio">
+                    <p class="text-muted">Nenhuma receita registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list me-2"></i>Últimas Despesas</h5>
+            </div>
+            <div class="card-body">
+                <div id="ultimas-despesas-relatorio">
+                    <p class="text-muted">Nenhuma despesa registrada ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line me-2"></i>Análise de Saldo</h5>
+            </div>
+            <div class="card-body">
+                <div id="analise-saldo">
+                    <p class="text-muted">Carregando análise...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // configurar selects de filtro
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const btnAplicar = document.getElementById('btnAplicarFiltro');
+    const btnLimpar = document.getElementById('btnLimparFiltro');
+
+    if (filtroCategoria) {
+        filtroCategoria.addEventListener('change', function() {
+            // carregar subcategorias via API usando data-id
+            const selected = this.options[this.selectedIndex];
+            const catId = selected.dataset.id;
+            filtroSubcategoria.innerHTML = '<option value="">Todas as subcategorias</option>';
+            if (!catId) return;
+            fetch(`/api/subcategorias/${catId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        data.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.nome || s.id;
+                            opt.textContent = s.nome;
+                            filtroSubcategoria.appendChild(opt);
+                        });
+                    }
+                })
+                .catch(err => console.error('Erro ao carregar subcategorias:', err));
+        });
+    }
+
+    // Adicionar event listeners para os campos de data
+    const filtroDataInicio = document.getElementById('filtroDataInicio');
+    const filtroDataFim = document.getElementById('filtroDataFim');
+
+    filtroDataInicio && filtroDataInicio.addEventListener('change', function() { 
+        if (this.value && filtroDataFim.value && new Date(this.value) > new Date(filtroDataFim.value)) {
+            alert('A data inicial não pode ser maior que a data final.');
+            this.value = '';
+            return;
+        }
+        carregarRelatorios(); 
+    });
+
+    filtroDataFim && filtroDataFim.addEventListener('change', function() { 
+        if (this.value && filtroDataInicio.value && new Date(filtroDataInicio.value) > new Date(this.value)) {
+            alert('A data inicial não pode ser maior que a data final.');
+            this.value = '';
+            return;
+        }
+        carregarRelatorios(); 
+    });
+
+    btnAplicar && btnAplicar.addEventListener('click', function() { carregarRelatorios(); });
+    btnLimpar && btnLimpar.addEventListener('click', function() {
+        if (filtroCategoria) filtroCategoria.value = '';
+        if (filtroSubcategoria) filtroSubcategoria.innerHTML = '<option value="">Todas as subcategorias</option>';
+        document.getElementById('filtroDataInicio').value = '';
+        document.getElementById('filtroDataFim').value = '';
+        const filtroTipoPagamento = document.getElementById('filtroTipoPagamento');
+        if (filtroTipoPagamento) filtroTipoPagamento.value = '';
+        carregarRelatorios();
+    });
+
+    carregarRelatorios();
+});
+
+function carregarRelatorios() {
+    // Ler filtros
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const filtroDataInicio = document.getElementById('filtroDataInicio');
+    const filtroDataFim = document.getElementById('filtroDataFim');
+    
+    // Validar datas
+    if (filtroDataInicio.value && filtroDataFim.value) {
+        if (new Date(filtroDataInicio.value) > new Date(filtroDataFim.value)) {
+            alert('A data inicial não pode ser maior que a data final.');
+            return;
+        }
+    }
+    
+    const params = new URLSearchParams();
+    if (filtroCategoria && filtroCategoria.value) params.append('categoria', filtroCategoria.value);
+    if (filtroSubcategoria && filtroSubcategoria.value) params.append('subcategoria', filtroSubcategoria.value);
+    if (filtroDataInicio && filtroDataInicio.value) params.append('data_inicio', filtroDataInicio.value);
+    if (filtroDataFim && filtroDataFim.value) params.append('data_fim', filtroDataFim.value);
+    const filtroTipoPagamento = document.getElementById('filtroTipoPagamento');
+    if (filtroTipoPagamento && filtroTipoPagamento.value) params.append('tipo_pagamento_id', filtroTipoPagamento.value);
+    const url = '/api/relatorios/resumo' + (params.toString() ? ('?' + params.toString()) : '');
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            // Atualizar totais
+            document.getElementById('total-receitas-relatorio').textContent = formatarMoeda(data.total_receitas);
+            document.getElementById('total-despesas-relatorio').textContent = formatarMoeda(data.total_despesas);
+            document.getElementById('saldo-atual-relatorio').textContent = formatarMoeda(data.saldo_atual);
+            
+            // Atualizar cor do saldo
+            const saldoElement = document.getElementById('saldo-atual-relatorio').parentElement.parentElement.parentElement;
+            if (data.saldo_atual >= 0) {
+                saldoElement.className = 'card text-white bg-info';
+            } else {
+                saldoElement.className = 'card text-white bg-warning';
+            }
+            
+            // Mostrar receitas por categoria
+            const receitasCategoriaDiv = document.getElementById('receitas-categoria');
+            if (data.receitas_categoria.length > 0) {
+                receitasCategoriaDiv.innerHTML = data.receitas_categoria.map(item => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-primary me-2">${item.categoria}</span>
+                        <strong>${formatarMoeda(item.total)}</strong>
+                    </div>`
+                ).join('');
+            } else {
+                receitasCategoriaDiv.innerHTML = '<p class="text-muted">Nenhuma receita registrada ainda.</p>';
+            }
+            
+            // Mostrar despesas por categoria
+            const despesasCategoriaDiv = document.getElementById('despesas-categoria');
+            if (data.despesas_categoria.length > 0) {
+                despesasCategoriaDiv.innerHTML = data.despesas_categoria.map(item => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-secondary me-2">${item.categoria}</span>
+                        <strong>${formatarMoeda(item.total)}</strong>
+                    </div>`
+                ).join('');
+            } else {
+                despesasCategoriaDiv.innerHTML = '<p class="text-muted">Nenhuma despesa registrada ainda.</p>';
+            }
+            
+            // Mostrar últimas receitas
+            const ultimasReceitasDiv = document.getElementById('ultimas-receitas-relatorio');
+            if (data.ultimas_receitas.length > 0) {
+                ultimasReceitasDiv.innerHTML = data.ultimas_receitas.map(receita => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${receita.descricao}</strong><br>
+                            <small class="text-muted">${receita.categoria} - ${receita.data}</small>
+                        </div>
+                        <span class="badge bg-success">${formatarMoeda(receita.valor)}</span>
+                    </div>`
+                ).join('');
+            } else {
+                ultimasReceitasDiv.innerHTML = '<p class="text-muted">Nenhuma receita registrada ainda.</p>';
+            }
+            
+            // Mostrar últimas despesas
+            const ultimasDespesasDiv = document.getElementById('ultimas-despesas-relatorio');
+            if (data.ultimas_despesas.length > 0) {
+                ultimasDespesasDiv.innerHTML = data.ultimas_despesas.map(despesa => 
+                    `<div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${despesa.descricao}</strong><br>
+                            <small class="text-muted">${despesa.categoria} - ${despesa.data}</small>
+                        </div>
+                        <span class="badge bg-danger">${formatarMoeda(despesa.valor)}</span>
+                    </div>`
+                ).join('');
+            } else {
+                ultimasDespesasDiv.innerHTML = '<p class="text-muted">Nenhuma despesa registrada ainda.</p>';
+            }
+            
+            // Análise de saldo
+            const analiseSaldoDiv = document.getElementById('analise-saldo');
+            let analise = '';
+            
+            if (data.saldo_atual > 0) {
+                analise = `
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-thumbs-up me-2"></i>Saldo Positivo!</h6>
+                        <p class="mb-0">Parabéns! Você está com saldo positivo de ${formatarMoeda(data.saldo_atual)}. 
+                        Isso indica que suas receitas estão superando suas despesas.</p>
+                    </div>
+                `;
+            } else if (data.saldo_atual < 0) {
+                analise = `
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Saldo Negativo</h6>
+                        <p class="mb-0">Atenção! Você está com saldo negativo de ${formatarMoeda(Math.abs(data.saldo_atual))}. 
+                        Considere revisar suas despesas ou aumentar suas receitas.</p>
+                    </div>
+                `;
+            } else {
+                analise = `
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-balance-scale me-2"></i>Saldo Equilibrado</h6>
+                        <p class="mb-0">Seu saldo está equilibrado. Receitas e despesas estão iguais.</p>
+                    </div>
+                `;
+            }
+            
+            analiseSaldoDiv.innerHTML = analise;
+        })
+        .catch(error => {
+            console.error('Erro ao carregar relatórios:', error);
+        });
+}
+
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
+}
+
+function gerarPDF(e) {
+            // Validar datas
+            const dataInicio = document.getElementById('filtroDataInicio').value;
+            const dataFim = document.getElementById('filtroDataFim').value;
+            
+            if (dataInicio && dataFim && new Date(dataInicio) > new Date(dataFim)) {
+                alert('A data inicial não pode ser maior que a data final.');
+                return;
+            }
+
+            // Mostrar loading - capturar botão com segurança
+            const evt = e || window.event;
+            let btn = null;
+            if (evt && evt.target) btn = evt.target;
+            // se target for o ícone dentro do botão, subir até o button
+            if (btn && btn.tagName && btn.tagName.toLowerCase() !== 'button') {
+                btn = btn.closest('button');
+            }
+            // fallback: procurar botão vermelho da barra
+            if (!btn) btn = document.querySelector('.btn-danger');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
+                btn.disabled = true;
+            }
+
+            // Fazer requisição para gerar PDF (respeitando filtros)
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const filtroDataInicio = document.getElementById('filtroDataInicio');
+    const filtroDataFim = document.getElementById('filtroDataFim');
+    const params = new URLSearchParams();
+    if (filtroCategoria && filtroCategoria.value) params.append('categoria', filtroCategoria.value);
+    if (filtroSubcategoria && filtroSubcategoria.value) params.append('subcategoria', filtroSubcategoria.value);
+    if (filtroDataInicio && filtroDataInicio.value) params.append('data_inicio', filtroDataInicio.value);
+    if (filtroDataFim && filtroDataFim.value) params.append('data_fim', filtroDataFim.value);
+    const filtroTipoPagamento = document.getElementById('filtroTipoPagamento');
+    if (filtroTipoPagamento && filtroTipoPagamento.value) params.append('tipo_pagamento_id', filtroTipoPagamento.value);
+    const url = '/api/relatorio/pdf' + (params.toString() ? ('?' + params.toString()) : '');
+
+    // Fazer requisição para gerar PDF
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro ao gerar PDF');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Criar link para download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `relatorio_financeiro_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Restaurar botão
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao gerar PDF. Tente novamente.');
+            
+            // Restaurar botão
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+}
+
+function imprimirRelatorio() {
+    window.print();
+}
+</script>
+{% endblock %}

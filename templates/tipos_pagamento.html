@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-credit-card me-2"></i>Tipos de Pagamento</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalTipoPagamento">
+                <i class="fas fa-plus me-2"></i>Novo Tipo de Pagamento
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Descrição</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-tipos-pagamento">
+                            {% for tipo in tipos_pagamento %}
+                            <tr>
+                                <td>{{ tipo.nome }}</td>
+                                <td>{{ tipo.descricao or '-' }}</td>
+                                <td>
+                                    {% if tipo.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning me-1" onclick="alternarStatus({{ tipo.id }})">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deletarTipoPagamento({{ tipo.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Novo Tipo de Pagamento -->
+<div class="modal fade" id="modalTipoPagamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Tipo de Pagamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formTipoPagamento">
+                    <div class="mb-3">
+                        <label for="nomeTipoPagamento" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nomeTipoPagamento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricaoTipoPagamento" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricaoTipoPagamento" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarTipoPagamento()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function salvarTipoPagamento() {
+    const nome = document.getElementById('nomeTipoPagamento').value;
+    const descricao = document.getElementById('descricaoTipoPagamento').value;
+
+    if (!nome) {
+        alert('Por favor, preencha o nome do tipo de pagamento.');
+        return;
+    }
+    
+    fetch('/api/tipo-pagamento', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            nome: nome,
+            descricao: descricao
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar tipo de pagamento.');
+    });
+}
+
+function alternarStatus(id) {
+    fetch(`/api/tipo-pagamento/${id}/toggle`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao alterar status.');
+    });
+}
+
+function deletarTipoPagamento(id) {
+    if (confirm('Tem certeza que deseja deletar este tipo de pagamento? Isso pode afetar despesas existentes.')) {
+        fetch(`/api/tipo-pagamento/${id}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao deletar tipo de pagamento.');
+        });
+    }
+}
+</script>
+{% endblock %}
