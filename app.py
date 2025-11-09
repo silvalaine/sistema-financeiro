@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, make_response, session, g
+import os
 from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy import inspect, text
@@ -7,8 +8,12 @@ import io
 import secrets
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = secrets.token_hex(32)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sistema_financeiro.db'
+# Use SECRET_KEY and DATABASE_URL from environment when available (useful in hosting)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# Make sqlite path absolute by default so WSGI processes can find the DB reliably
+basedir = os.path.abspath(os.path.dirname(__file__))
+default_sqlite = f"sqlite:///{os.path.join(basedir, 'sistema_financeiro.db')}"
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', default_sqlite)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 from models import db, Receita, CategoriaDespesa, SubcategoriaDespesa, TipoPagamento, Despesa, Usuario
