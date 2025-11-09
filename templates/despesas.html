@@ -12,6 +12,52 @@
     </div>
 </div>
 
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="filtroCategoria" class="form-label">
+                            <i class="fas fa-filter me-2"></i>Filtrar por Categoria
+                        </label>
+                        <select class="form-select" id="filtroCategoria">
+                            <option value="">Todas as categorias</option>
+                            {% for categoria in categorias %}
+                            <option value="{{ categoria.nome }}" data-id="{{ categoria.id }}">{{ categoria.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filtroSubcategoria" class="form-label">
+                            <i class="fas fa-filter me-2"></i>Filtrar por Subcategoria
+                        </label>
+                        <select class="form-select" id="filtroSubcategoria">
+                            <option value="">Todas as subcategorias</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-secondary w-100" onclick="limparFiltros()">
+                            <i class="fas fa-times me-2"></i>Limpar Filtros
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title mb-1">
+                                    <i class="fas fa-dollar-sign me-2"></i>Total
+                                </h6>
+                                <h4 class="mb-0" id="totalDespesas">R$ 0,00</h4>
+                                <small id="contadorDespesas">0 despesa(s)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -39,9 +85,9 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-danger fw-bold">
-                                    R$ {{ "%.2f"|format(despesa.valor) }}
+                                    R$ {{ "{:,.2f}".format(despesa.valor).replace(',', '_').replace('.', ',').replace('_', '.') }}
                                     {% if despesa.parcelas > 1 %}
-                                    <br><small class="text-muted">Total: R$ {{ "%.2f"|format(despesa.valor * despesa.parcelas) }}</small>
+                                    <br><small class="text-muted">Total: R$ {{ "{:,.2f}".format(despesa.valor * despesa.parcelas).replace(',', '_').replace('.', ',').replace('_', '.') }}</small>
                                     {% endif %}
                                 </td>
                                 <td>{{ despesa.data.strftime('%d/%m/%Y') }}</td>
@@ -142,22 +188,176 @@
 
 {% block scripts %}
 <script>
+function atualizarTotalDespesas(total, contador) {
+    const totalElement = document.getElementById('totalDespesas');
+    const contadorElement = document.getElementById('contadorDespesas');
+    
+    // Arredonda para 2 casas decimais mantendo precisão
+    total = Number(total.toFixed(2));
+    
+    if (totalElement) {
+        // Formata o número no padrão brasileiro (ex: R$ 1.234,56)
+        const valorFormatado = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(total);
+        
+        totalElement.textContent = valorFormatado;
+    }
+    
+    if (contadorElement) {
+        contadorElement.textContent = contador === 1 ? '1 despesa' : `${contador} despesas`;
+    }
+}
+
+function filtrarTabela() {
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const categoriaFiltro = filtroCategoria ? filtroCategoria.value : '';
+    const subcategoriaFiltro = filtroSubcategoria ? filtroSubcategoria.value : '';
+    const linhas = document.getElementById('tabela-despesas').getElementsByTagName('tr');
+    
+    let total = 0;
+    let contador = 0;
+    
+    Array.from(linhas).forEach(linha => {
+        const categoriaCell = linha.querySelector('td:nth-child(4)');
+        const subcategoriaCell = linha.querySelector('td:nth-child(5)');
+        const valorCell = linha.querySelector('td:nth-child(2)');
+        
+        if (!categoriaCell) return;
+        
+        // Extrair texto da categoria (pode estar dentro de um badge)
+        const categoriaBadge = categoriaCell.querySelector('.badge');
+        const categoriaTexto = categoriaBadge ? categoriaBadge.textContent.trim() : categoriaCell.textContent.trim();
+        
+        // Extrair texto da subcategoria (pode estar dentro de um badge ou ser '-')
+        let subcategoriaTexto = '';
+        if (subcategoriaCell) {
+            const subcategoriaBadge = subcategoriaCell.querySelector('.badge');
+            subcategoriaTexto = subcategoriaBadge ? subcategoriaBadge.textContent.trim() : subcategoriaCell.textContent.trim();
+            subcategoriaTexto = subcategoriaTexto === '-' ? '' : subcategoriaTexto;
+        }
+        
+        let mostrar = true;
+        
+        // Filtrar por categoria
+        if (categoriaFiltro && categoriaTexto.toLowerCase() !== categoriaFiltro.toLowerCase()) {
+            mostrar = false;
+        }
+        
+        // Filtrar por subcategoria
+        if (mostrar && subcategoriaFiltro && subcategoriaTexto.toLowerCase() !== subcategoriaFiltro.toLowerCase()) {
+            mostrar = false;
+        }
+        
+        // Mostrar ou ocultar linha
+        linha.style.display = mostrar ? '' : 'none';
+        
+        // Calcular total das linhas visíveis
+        if (mostrar && valorCell) {
+            contador++;
+            // Extrair valor da célula
+            const valorTexto = valorCell.textContent.trim();
+            // Remover "Total: R$ X" se existir e pegar apenas o valor da parcela
+            const linhaValor = valorTexto.split('\n')[0]; // Pega apenas a primeira linha
+            const match = linhaValor.match(/R\$\s*([\d.,]+)/);
+            if (match) {
+                // Converter para número (substituir pontos de milhar e vírgula decimal)
+                let valorStr = match[1];
+                // Remove todos os pontos, exceto o último que será substituído por ponto decimal
+                valorStr = valorStr.replace(/\./g, '').replace(',', '.');
+                const valor = parseFloat(valorStr);
+                if (!isNaN(valor)) {
+                    total += valor;
+                }
+            }
+        }
+    });
+    
+    // Atualizar total e contador na tela
+    atualizarTotalDespesas(total, contador);
+}
+
+// Função para atualizar o total exibido
+function atualizarTotalDespesas(total, contador) {
+    const totalElement = document.getElementById('totalDespesas');
+    const contadorElement = document.getElementById('contadorDespesas');
+    
+    // Arredonda para 2 casas decimais
+    total = Math.round(total * 100) / 100;
+    
+    if (totalElement) {
+        totalElement.textContent = total.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    if (contadorElement) {
+        contadorElement.textContent = contador === 1 ? '1 despesa' : `${contador} despesas`;
+    }
+}
+
+// Função para limpar filtros
+function limparFiltros() {
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    
+    if (filtroCategoria) filtroCategoria.value = '';
+    if (filtroSubcategoria) {
+        filtroSubcategoria.value = '';
+        filtroSubcategoria.innerHTML = '<option value="">Todas as subcategorias</option>';
+    }
+    filtrarTabela();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Definir data atual como padrão
-    document.getElementById('dataDespesa').value = new Date().toISOString().split('T')[0];
-    // Quando categoria mudar, carregar subcategorias
+    const dataInput = document.getElementById('dataDespesa');
+    if (dataInput) {
+        dataInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Filtros de categoria e subcategoria
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    
+    // Quando o filtro de categoria mudar, atualizar subcategorias e filtrar tabela
+    if (filtroCategoria) {
+        filtroCategoria.addEventListener('change', function() {
+            const categoriaNome = this.value;
+            atualizarFiltroSubcategorias(categoriaNome);
+            filtrarTabela();
+        });
+    }
+    
+    // Quando o filtro de subcategoria mudar, filtrar tabela
+    if (filtroSubcategoria) {
+        filtroSubcategoria.addEventListener('change', function() {
+            filtrarTabela();
+        });
+    }
+    
+    // Quando categoria mudar no modal, carregar subcategorias
     const categoriaSelect = document.getElementById('categoriaDespesa');
     const subcategoriaSelect = document.getElementById('subcategoriaDespesa');
     if (categoriaSelect) {
         categoriaSelect.addEventListener('change', function() {
             const categoriaId = this.value;
             // limpar opções
-            subcategoriaSelect.innerHTML = '<option value="">Selecione uma subcategoria</option>';
+            if (subcategoriaSelect) {
+                subcategoriaSelect.innerHTML = '<option value="">Selecione uma subcategoria</option>';
+            }
             if (!categoriaId) return;
             fetch(`/api/subcategorias/${categoriaId}`)
                 .then(resp => resp.json())
                 .then(data => {
-                    if (Array.isArray(data)) {
+                    if (Array.isArray(data) && subcategoriaSelect) {
                         data.forEach(s => {
                             const opt = document.createElement('option');
                             opt.value = s.nome || s.id;
@@ -169,7 +369,59 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(err => console.error('Erro ao obter subcategorias:', err));
         });
     }
+    
+    // Calcular total inicial ao carregar a página
+    setTimeout(() => {
+        filtrarTabela();
+    }, 200);
+    
+    // Event listeners para atualização do parcelamento
+    const parcelamentoInput = document.getElementById('parcelamentoDespesa');
+    const valorInput = document.getElementById('valorDespesa');
+    const dataInputModal = document.getElementById('dataDespesa');
+
+    // Atualizar info do parcelamento quando os valores mudarem
+    if (parcelamentoInput && valorInput && dataInputModal) {
+        [parcelamentoInput, valorInput, dataInputModal].forEach(input => {
+            input.addEventListener('input', atualizarInfoParcelamento);
+        });
+    }
 });
+
+// Função para atualizar subcategorias no filtro
+function atualizarFiltroSubcategorias(categoriaNome) {
+    const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    if (!filtroSubcategoria) return;
+    
+    filtroSubcategoria.innerHTML = '<option value="">Todas as subcategorias</option>';
+    
+    if (!categoriaNome) {
+        return; // Se não há categoria, não carregar subcategorias
+    }
+    
+    // Buscar categoria pelo nome para obter o ID
+    const categoriaOption = document.querySelector(`#filtroCategoria option[value="${categoriaNome}"]`);
+    if (!categoriaOption) return;
+    
+    // Tentar obter ID da categoria
+    const categoriaId = categoriaOption.getAttribute('data-id');
+    if (categoriaId) {
+        fetch(`/api/subcategorias/${categoriaId}`)
+            .then(resp => resp.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    data.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.nome;
+                        opt.textContent = s.nome;
+                        filtroSubcategoria.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => console.error('Erro ao carregar subcategorias:', err));
+    }
+}
+
 
 // Função para atualizar informações do parcelamento
 function atualizarInfoParcelamento() {
@@ -188,8 +440,14 @@ function atualizarInfoParcelamento() {
         
         const formatarData = (data) => data.toLocaleDateString('pt-BR');
         
-        document.getElementById('valorParcela').textContent = 
-            `Valor por parcela: ${valorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+        const valorParcelaFormatado = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Number(valorParcela.toFixed(2)));
+        
+        document.getElementById('valorParcela').textContent = `Valor por parcela: ${valorParcelaFormatado}`;
         document.getElementById('datasParcelas').textContent = 
             `Período: ${formatarData(dataInicialObj)} até ${formatarData(dataFinalObj)}`;
         
@@ -198,46 +456,6 @@ function atualizarInfoParcelamento() {
         infoDiv.classList.add('d-none');
     }
 }
-
-// Adicionar event listeners para atualização do parcelamento
-document.addEventListener('DOMContentLoaded', function() {
-    const parcelamentoInput = document.getElementById('parcelamentoDespesa');
-    const valorInput = document.getElementById('valorDespesa');
-    const dataInput = document.getElementById('dataDespesa');
-
-    // Definir data atual como padrão
-    dataInput.value = new Date().toISOString().split('T')[0];
-
-    // Atualizar info do parcelamento quando os valores mudarem
-    [parcelamentoInput, valorInput, dataInput].forEach(input => {
-        input.addEventListener('input', atualizarInfoParcelamento);
-    });
-
-    // Quando categoria mudar, carregar subcategorias
-    const categoriaSelect = document.getElementById('categoriaDespesa');
-    const subcategoriaSelect = document.getElementById('subcategoriaDespesa');
-    if (categoriaSelect) {
-        categoriaSelect.addEventListener('change', function() {
-            const categoriaId = this.value;
-            // limpar opções
-            subcategoriaSelect.innerHTML = '<option value="">Selecione uma subcategoria</option>';
-            if (!categoriaId) return;
-            fetch(`/api/subcategorias/${categoriaId}`)
-                .then(resp => resp.json())
-                .then(data => {
-                    if (Array.isArray(data)) {
-                        data.forEach(s => {
-                            const opt = document.createElement('option');
-                            opt.value = s.nome || s.id;
-                            opt.textContent = s.nome;
-                            subcategoriaSelect.appendChild(opt);
-                        });
-                    }
-                })
-                .catch(err => console.error('Erro ao obter subcategorias:', err));
-        });
-    }
-});
 
 function salvarDespesa() {
     const descricao = document.getElementById('descricaoDespesa').value;
@@ -275,6 +493,10 @@ function salvarDespesa() {
     .then(data => {
         if (data.success) {
             alert(data.message);
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalDespesa'));
+            if (modal) modal.hide();
+            // Recarregar página para atualizar tabela e total
             location.reload();
         } else {
             alert('Erro: ' + data.message);

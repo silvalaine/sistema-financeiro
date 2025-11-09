@@ -1,30 +1,156 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, make_response, session, g
 from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy import inspect, text
+from functools import wraps
 import io
+import secrets
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'sistema-financeiro-domestico-2025'
+app.config['SECRET_KEY'] = secrets.token_hex(32)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sistema_financeiro.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-from models import db, Receita, CategoriaDespesa, SubcategoriaDespesa, TipoPagamento, Despesa
+from models import db, Receita, CategoriaDespesa, SubcategoriaDespesa, TipoPagamento, Despesa, Usuario
 from pdf_generator import generate_pdf_report
 
 db.init_app(app)
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Por favor, faça login para acessar esta página.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.before_request
+def load_user():
+    user_id = session.get('user_id')
+    if user_id:
+        g.user = Usuario.query.get(user_id)
+    else:
+        g.user = None
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Por favor, faça login para acessar esta página.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        
+        if not g.user or not g.user.is_admin:
+            flash('Acesso negado. Você precisa ser administrador.', 'danger')
+            return redirect(url_for('index'))
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = Usuario.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            session['user_id'] = user.id
+            flash('Login realizado com sucesso!', 'success')
+            next_page = request.args.get('next')
+            if next_page:
+                return redirect(next_page)
+            return redirect(url_for('index'))
+        else:
+            flash('Usuário ou senha inválidos!', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    flash('Você foi desconectado com sucesso!', 'success')
+    return redirect(url_for('login'))
+
+@app.route('/usuarios')
+@admin_required
+def usuarios():
+    usuarios_list = Usuario.query.all()
+    return render_template('usuarios.html', usuarios=usuarios_list)
+
+@app.route('/api/usuarios', methods=['POST'])
+@admin_required
+def adicionar_usuario():
+    try:
+        data = request.get_json()
+        username = data['username']
+        password = data['password']
+        is_admin = data.get('is_admin', False)
+        
+        if Usuario.query.filter_by(username=username).first():
+            return jsonify({'success': False, 'message': 'Nome de usuário já existe!'})
+        
+        novo_usuario = Usuario(username=username, is_admin=is_admin)
+        novo_usuario.set_password(password)
+        
+        db.session.add(novo_usuario)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Usuário criado com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/usuarios/<username>', methods=['DELETE'])
+@admin_required
+def deletar_usuario(username):
+    try:
+        if username == 'admin':
+            return jsonify({'success': False, 'message': 'Não é possível deletar o usuário admin!'})
+        
+        usuario = Usuario.query.filter_by(username=username).first()
+        if not usuario:
+            return jsonify({'success': False, 'message': 'Usuário não encontrado!'})
+        
+        db.session.delete(usuario)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Usuário deletado com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/usuarios/alterar-senha', methods=['POST'])
+@login_required
+def alterar_senha():
+    try:
+        data = request.get_json()
+        senha_atual = data['senha_atual']
+        nova_senha = data['nova_senha']
+        
+        usuario = Usuario.query.get(session['user_id'])
+        if not usuario.check_password(senha_atual):
+            return jsonify({'success': False, 'message': 'Senha atual incorreta!'})
+        
+        usuario.set_password(nova_senha)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Senha alterada com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/receitas')
+@login_required
 def receitas():
     receitas_list = Receita.query.order_by(Receita.data.desc()).all()
     return render_template('receitas.html', receitas=receitas_list)
 
 @app.route('/despesas')
+@login_required
 def despesas():
     despesas_list = Despesa.query.order_by(Despesa.data.desc()).all()
     categorias_list = CategoriaDespesa.query.all()
@@ -35,6 +161,7 @@ def despesas():
                        tipos_pagamento=tipos_pagamento_list)
 
 @app.route('/relatorios')
+@login_required
 def relatorios():
     categorias_list = CategoriaDespesa.query.all()
     tipos_pagamento_list = TipoPagamento.query.filter_by(ativo=True).all()
@@ -43,17 +170,20 @@ def relatorios():
                        tipos_pagamento=tipos_pagamento_list)
 
 @app.route('/categorias')
+@login_required
 def categorias():
     categorias_list = CategoriaDespesa.query.all()
     return render_template('categorias.html', categorias=categorias_list)
 
 @app.route('/tipos-pagamento')
+@login_required
 def tipos_pagamento():
     tipos_list = TipoPagamento.query.order_by(TipoPagamento.nome).all()
     return render_template('tipos_pagamento.html', tipos_pagamento=tipos_list)
 
 # API Routes
 @app.route('/api/relatorios/resumo')
+@login_required
 def relatorio_resumo():
     try:
         categoria = request.args.get('categoria')
@@ -165,6 +295,7 @@ def relatorio_resumo():
         return jsonify({'error': str(e)})
 
 @app.route('/api/relatorio/pdf')
+@login_required
 def gerar_relatorio_pdf():
     try:
         if not hasattr(app, 'logger'):
@@ -184,6 +315,7 @@ def gerar_relatorio_pdf():
         return jsonify({'error': f'Erro ao gerar PDF: {str(e)}'}), 500
 
 @app.route('/api/receita', methods=['POST'])
+@login_required
 def adicionar_receita():
     try:
         data = request.get_json()
@@ -200,6 +332,7 @@ def adicionar_receita():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/despesa', methods=['POST'])
+@login_required
 def adicionar_despesa():
     try:
         data = request.get_json()
@@ -247,6 +380,7 @@ def adicionar_despesa():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/receita/<int:id>', methods=['DELETE'])
+@login_required
 def deletar_receita(id):
     try:
         receita = Receita.query.get_or_404(id)
@@ -257,6 +391,7 @@ def deletar_receita(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/despesa/<int:id>', methods=['DELETE'])
+@login_required
 def deletar_despesa(id):
     try:
         despesa = Despesa.query.get_or_404(id)
@@ -302,6 +437,7 @@ def deletar_despesa(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/categoria', methods=['POST'])
+@login_required
 def adicionar_categoria():
     try:
         data = request.get_json()
@@ -316,6 +452,7 @@ def adicionar_categoria():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/categoria/<int:id>', methods=['DELETE'])
+@login_required
 def deletar_categoria(id):
     try:
         categoria = CategoriaDespesa.query.get_or_404(id)
@@ -326,6 +463,7 @@ def deletar_categoria(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/subcategoria', methods=['POST'])
+@login_required
 def adicionar_subcategoria():
     try:
         data = request.get_json()
@@ -341,6 +479,7 @@ def adicionar_subcategoria():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/subcategoria/<int:id>', methods=['DELETE'])
+@login_required
 def deletar_subcategoria(id):
     try:
         subcategoria = SubcategoriaDespesa.query.get_or_404(id)
@@ -351,6 +490,7 @@ def deletar_subcategoria(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/subcategorias/<int:categoria_id>')
+@login_required
 def obter_subcategorias(categoria_id):
     try:
         subcategorias = SubcategoriaDespesa.query.filter_by(categoria_id=categoria_id).all()
@@ -359,6 +499,7 @@ def obter_subcategorias(categoria_id):
         return jsonify({'error': str(e)})
 
 @app.route('/api/tipo-pagamento', methods=['POST'])
+@login_required
 def adicionar_tipo_pagamento():
     try:
         data = request.get_json()
@@ -373,6 +514,7 @@ def adicionar_tipo_pagamento():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/tipo-pagamento/<int:id>', methods=['DELETE'])
+@login_required
 def deletar_tipo_pagamento(id):
     try:
         tipo = TipoPagamento.query.get_or_404(id)
@@ -385,6 +527,7 @@ def deletar_tipo_pagamento(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/tipo-pagamento/<int:id>/toggle', methods=['POST'])
+@login_required
 def alternar_status_tipo_pagamento(id):
     try:
         tipo = TipoPagamento.query.get_or_404(id)
@@ -395,6 +538,7 @@ def alternar_status_tipo_pagamento(id):
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/tipos-pagamento')
+@login_required
 def obter_tipos_pagamento():
     try:
         tipos = TipoPagamento.query.filter_by(ativo=True).all()
@@ -440,6 +584,7 @@ def _ensure_columns():
 with app.app_context():
     db.create_all()
     _ensure_columns()
+    Usuario.init_default_user()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

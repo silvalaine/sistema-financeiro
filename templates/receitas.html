@@ -12,6 +12,46 @@
     </div>
 </div>
 
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-4">
+                        <label for="filtroCategoria" class="form-label">
+                            <i class="fas fa-filter me-2"></i>Filtrar por Categoria
+                        </label>
+                        <select class="form-select" id="filtroCategoria">
+                            <option value="">Todas as categorias</option>
+                            <option value="Salário">Salário</option>
+                            <option value="Freelance">Freelance</option>
+                            <option value="Investimentos">Investimentos</option>
+                            <option value="Vendas">Vendas</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-secondary w-100" onclick="limparFiltros()">
+                            <i class="fas fa-times me-2"></i>Limpar Filtros
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h6 class="card-title mb-1">
+                                    <i class="fas fa-dollar-sign me-2"></i>Total
+                                </h6>
+                                <h4 class="mb-0" id="totalReceitas">R$ 0,00</h4>
+                                <small id="contadorReceitas">0 receita(s)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -95,9 +135,101 @@
 
 {% block scripts %}
 <script>
+// Função para filtrar a tabela de receitas
+function filtrarTabela() {
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    const categoriaFiltro = filtroCategoria ? filtroCategoria.value : '';
+    const linhas = document.querySelectorAll('#tabela-receitas tbody tr');
+    
+    
+    let total = 0;
+    let contador = 0;
+    
+    linhas.forEach(linha => {
+        const categoriaCell = linha.querySelector('td:nth-child(4)');
+        const valorCell = linha.querySelector('td:nth-child(2)');
+        
+        if (!categoriaCell) return;
+        
+        // Extrair texto da categoria (pode estar dentro de um badge)
+        const categoriaBadge = categoriaCell.querySelector('.badge');
+        const categoriaTexto = categoriaBadge ? categoriaBadge.textContent.trim() : categoriaCell.textContent.trim();
+        
+        let mostrar = true;
+        
+        // Filtrar por categoria
+        if (categoriaFiltro && categoriaTexto !== categoriaFiltro) {
+            mostrar = false;
+        }
+        
+        // Mostrar ou ocultar linha
+        linha.style.display = mostrar ? '' : 'none';
+        
+        // Calcular total das linhas visíveis
+        if (mostrar && valorCell) {
+            contador++;
+            // Extrair valor da célula
+            const valorTexto = valorCell.textContent.trim();
+            // Procurar por padrão R$ X.XX ou R$ X,XX
+            const match = valorTexto.match(/R\$\s*([\d.,]+)/);
+            if (match) {
+                // Converter para número (substituir vírgula por ponto e remover pontos de milhar)
+                const valorStr = match[1].replace(/\./g, '').replace(',', '.');
+                const valor = parseFloat(valorStr);
+                if (!isNaN(valor)) {
+                    total += valor;
+                }
+            }
+        }
+    });
+    
+    // Atualizar total e contador na tela
+    atualizarTotalReceitas(total, contador);
+}
+
+// Função para atualizar o total exibido
+function atualizarTotalReceitas(total, contador) {
+    const totalElement = document.getElementById('totalReceitas');
+    const contadorElement = document.getElementById('contadorReceitas');
+    
+    if (totalElement) {
+        totalElement.textContent = total.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        });
+    }
+    
+    if (contadorElement) {
+        contadorElement.textContent = `${contador} receita(s)`;
+    }
+}
+
+// Função para limpar filtros
+function limparFiltros() {
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    if (filtroCategoria) {
+        filtroCategoria.value = '';
+        filtrarTabela();
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Definir data atual como padrão
-    document.getElementById('dataReceita').value = new Date().toISOString().split('T')[0];
+    const dataInput = document.getElementById('dataReceita');
+    if (dataInput) {
+        dataInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Filtro de categoria
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    if (filtroCategoria) {
+        filtroCategoria.addEventListener('change', filtrarTabela);
+    }
+    
+    // Calcular total inicial ao carregar a página
+    setTimeout(() => {
+        filtrarTabela();
+    }, 200);
 });
 
 function salvarReceita() {
@@ -129,6 +261,10 @@ function salvarReceita() {
     .then(data => {
         if (data.success) {
             alert(data.message);
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalReceita'));
+            if (modal) modal.hide();
+            // Recarregar página para atualizar tabela e total
             location.reload();
         } else {
             alert('Erro: ' + data.message);

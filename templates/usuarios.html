@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: none;
+        padding: 1.5rem;
+        border-radius: 15px 15px 0 0 !important;
+    }
+    
+    .btn-action {
+        transition: all 0.3s ease;
+    }
+    
+    .btn-action:hover {
+        transform: scale(1.05);
+    }
+    
+    .table th {
+        border-top: none;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .badge {
+        padding: 0.5em 1em;
+        font-weight: 500;
+    }
+    
+    .form-control {
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+    }
+    
+    .modal-content {
+        border-radius: 15px;
+        border: none;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .page-header {
+        background: linear-gradient(45deg, #3498db, #2c3e50);
+        padding: 2rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        color: white;
+    }
+</style>
+
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-users me-2"></i>Gerenciar Usuários</h2>
+            <p class="mb-0 text-white-50">Gerencie os usuários do sistema e suas permissões</p>
+        </div>
+        <button class="btn btn-light btn-action" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
+            <i class="fas fa-user-plus me-2"></i>Novo Usuário
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-user-shield me-2 text-primary"></i>Alterar Minha Senha
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="formAlterarSenha">
+                    <div class="mb-4">
+                        <label for="senhaAtual" class="form-label">
+                            <i class="fas fa-key me-2 text-muted"></i>Senha Atual
+                        </label>
+                        <input type="password" class="form-control" id="senhaAtual" 
+                            placeholder="Digite sua senha atual" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="novaSenha" class="form-label">
+                            <i class="fas fa-lock me-2 text-muted"></i>Nova Senha
+                        </label>
+                        <input type="password" class="form-control" id="novaSenha" 
+                            placeholder="Digite a nova senha" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="confirmarSenha" class="form-label">
+                            <i class="fas fa-check-circle me-2 text-muted"></i>Confirmar Nova Senha
+                        </label>
+                        <input type="password" class="form-control" id="confirmarSenha" 
+                            placeholder="Confirme a nova senha" required>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-action w-100" onclick="alterarSenha()">
+                        <i class="fas fa-save me-2"></i>Salvar Nova Senha
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-users me-2 text-primary"></i>Usuários do Sistema
+                    </h5>
+                    <span class="badge bg-primary" id="totalUsuarios">
+                        {{ usuarios|length }} usuário(s)
+                    </span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="px-4">Usuário</th>
+                                <th>Administrador</th>
+                                <th class="text-end px-4">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usuario in usuarios %}
+                            <tr>
+                                <td class="px-4">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-user-circle text-muted me-2"></i>
+                                        {{ usuario.username }}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if usuario.is_admin %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle me-1"></i>Sim
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-user me-1"></i>Não
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end px-4">
+                                    {% if usuario.username != 'admin' %}
+                                    <button class="btn btn-sm btn-outline-danger btn-action" 
+                                            onclick="deletarUsuario('{{ usuario.username }}')"
+                                            data-bs-toggle="tooltip" 
+                                            title="Deletar usuário">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                    {% else %}
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-shield-alt me-1"></i>Administrador Principal
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Novo Usuário -->
+<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNovoUsuario">
+                    <div class="mb-3">
+                        <label for="novoUsername" class="form-label">Nome de Usuário</label>
+                        <input type="text" class="form-control" id="novoUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novoPassword" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="novoPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirmarNovoPassword" class="form-label">Confirmar Senha</label>
+                        <input type="password" class="form-control" id="confirmarNovoPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isAdmin">
+                            <label class="form-check-label" for="isAdmin">Usuário Administrador</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="salvarNovoUsuario()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function alterarSenha() {
+    const senhaAtual = document.getElementById('senhaAtual').value;
+    const novaSenha = document.getElementById('novaSenha').value;
+    const confirmarSenha = document.getElementById('confirmarSenha').value;
+    
+    if (novaSenha !== confirmarSenha) {
+        alert('As senhas não coincidem!');
+        return;
+    }
+    
+    fetch('/api/usuarios/alterar-senha', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            senha_atual: senhaAtual,
+            nova_senha: novaSenha
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            document.getElementById('formAlterarSenha').reset();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao alterar senha.');
+    });
+}
+
+function salvarNovoUsuario() {
+    const username = document.getElementById('novoUsername').value;
+    const password = document.getElementById('novoPassword').value;
+    const confirmarPassword = document.getElementById('confirmarNovoPassword').value;
+    const isAdmin = document.getElementById('isAdmin').checked;
+    
+    if (password !== confirmarPassword) {
+        alert('As senhas não coincidem!');
+        return;
+    }
+    
+    fetch('/api/usuarios', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            username: username,
+            password: password,
+            is_admin: isAdmin
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao criar usuário.');
+    });
+}
+
+function deletarUsuario(username) {
+    if (!confirm(`Tem certeza que deseja deletar o usuário "${username}"?`)) {
+        return;
+    }
+    
+    fetch(`/api/usuarios/${username}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao deletar usuário.');
+    });
+}
+</script>
+{% endblock %}
