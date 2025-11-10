@@ -37,6 +37,16 @@
                         </select>
                     </div>
                     <div class="col-md-3">
+                        <label for="filtroStatusDespesa" class="form-label">
+                            <i class="fas fa-filter me-2"></i>Status
+                        </label>
+                        <select class="form-select" id="filtroStatusDespesa">
+                            <option value="">Todos</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="efetivado">Pago</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <button class="btn btn-secondary w-100" onclick="limparFiltros()">
                             <i class="fas fa-times me-2"></i>Limpar Filtros
                         </button>
@@ -84,14 +94,42 @@
                                     <br><small class="text-muted">Parcela {{ despesa.parcela_atual }}/{{ despesa.parcelas }}</small>
                                     {% endif %}
                                 </td>
-                                <td class="text-danger fw-bold">
-                                    R$ {{ "{:,.2f}".format(despesa.valor).replace(',', '_').replace('.', ',').replace('_', '.') }}
+                                <td class="fw-bold">
+                                    {% if despesa.valor_previsto %}
+                                        <div class="text-muted small">Previsto: R$ {{ "{:,.2f}".format(despesa.valor_previsto).replace(',', '_').replace('.', ',').replace('_', '.') }}</div>
+                                    {% endif %}
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" step="0.01" min="0" 
+                                               class="form-control form-control-sm valor-input"
+                                               value="{{ "%.2f"|format(despesa.valor or 0) }}"
+                                               data-id="{{ despesa.id }}"
+                                               data-original="{{ "%.2f"|format(despesa.valor or 0) }}"
+                                               data-compra-parcelada="{{ despesa.compra_parcelada_id or '' }}"
+                                               onchange="atualizarValorDespesa(this)">
+                                    </div>
                                     {% if despesa.parcelas > 1 %}
-                                    <br><small class="text-muted">Total: R$ {{ "{:,.2f}".format(despesa.valor * despesa.parcelas).replace(',', '_').replace('.', ',').replace('_', '.') }}</small>
+                                        <small class="text-muted">Total previsto: R$ {{ "{:,.2f}".format(despesa.valor_previsto * despesa.parcelas).replace(',', '_').replace('.', ',').replace('_', '.') }}</small>
                                     {% endif %}
                                 </td>
                                 <td>{{ despesa.data.strftime('%d/%m/%Y') }}</td>
-                                <td><span class="badge bg-secondary">{{ despesa.categoria }}</span></td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ despesa.categoria }}</span>
+                                    <div class="form-check form-switch d-inline-block ms-2">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="statusDespesa{{ despesa.id }}"
+                                               data-compra-parcelada="{{ despesa.compra_parcelada_id or '' }}"
+                                               {{ 'checked' if despesa.efetivado else '' }}
+                                               onchange="alternarStatusDespesa(this, {{ despesa.id }}, {{ 'true' if despesa.valor else 'false' }})">
+                                        <label class="form-check-label" for="statusDespesa{{ despesa.id }}">
+                                            {% if despesa.efetivado %}
+                                                <span class="badge bg-success">Pago</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark">Pendente</span>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                </td>
                                 <td>{% if despesa.subcategoria %}<span class="badge bg-info text-dark">{{ despesa.subcategoria }}</span>{% else %}-{% endif %}</td>
                                 <td>{% if despesa.tipo_pagamento %}<span class="badge bg-primary">{{ despesa.tipo_pagamento.nome }}</span>{% else %}-{% endif %}</td>
                                 <td>
@@ -124,12 +162,23 @@
                         <input type="text" class="form-control" id="descricaoDespesa" required>
                     </div>
                     <div class="mb-3">
-                        <label for="valorDespesa" class="form-label">Valor</label>
-                        <input type="number" class="form-control" id="valorDespesa" step="0.01" min="0" required>
+                        <label for="valorPrevistoDespesa" class="form-label">Valor Previsto</label>
+                        <input type="number" class="form-control" id="valorPrevistoDespesa" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valorDespesa" class="form-label">Valor Efetivo</label>
+                        <input type="number" class="form-control" id="valorDespesa" step="0.01" min="0">
+                        <small class="form-text text-muted">Deixe em branco se ainda não foi pago</small>
                     </div>
                     <div class="mb-3">
                         <label for="dataDespesa" class="form-label">Data</label>
                         <input type="date" class="form-control" id="dataDespesa" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="efetivoDespesa">
+                            <label class="form-check-label" for="efetivoDespesa">Despesa já paga?</label>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="categoriaDespesa" class="form-label">Categoria</label>
@@ -226,6 +275,8 @@ function filtrarTabela() {
         const categoriaCell = linha.querySelector('td:nth-child(4)');
         const subcategoriaCell = linha.querySelector('td:nth-child(5)');
         const valorCell = linha.querySelector('td:nth-child(2)');
+            const filtroStatus = document.getElementById('filtroStatusDespesa');
+            const statusFiltro = filtroStatus ? filtroStatus.value : '';
         
         if (!categoriaCell) return;
         
@@ -251,6 +302,17 @@ function filtrarTabela() {
         // Filtrar por subcategoria
         if (mostrar && subcategoriaFiltro && subcategoriaTexto.toLowerCase() !== subcategoriaFiltro.toLowerCase()) {
             mostrar = false;
+        }
+
+        // Filtrar por status (Pago / Pendente)
+        if (mostrar && statusFiltro) {
+            const statusCell = linha.querySelector('td:nth-child(4)');
+            const statusBadge = statusCell ? statusCell.querySelector('label .badge') : null;
+            const statusTexto = statusBadge ? statusBadge.textContent.trim().toLowerCase() : '';
+            const esperado = statusFiltro === 'efetivado' ? 'pago' : 'pendente';
+            if (!statusTexto.includes(esperado)) {
+                mostrar = false;
+            }
         }
         
         // Mostrar ou ocultar linha
@@ -307,12 +369,14 @@ function atualizarTotalDespesas(total, contador) {
 function limparFiltros() {
     const filtroCategoria = document.getElementById('filtroCategoria');
     const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const filtroStatus = document.getElementById('filtroStatusDespesa');
     
     if (filtroCategoria) filtroCategoria.value = '';
     if (filtroSubcategoria) {
         filtroSubcategoria.value = '';
         filtroSubcategoria.innerHTML = '<option value="">Todas as subcategorias</option>';
     }
+    if (filtroStatus) filtroStatus.value = '';
     filtrarTabela();
 }
 
@@ -326,6 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Filtros de categoria e subcategoria
     const filtroCategoria = document.getElementById('filtroCategoria');
     const filtroSubcategoria = document.getElementById('filtroSubcategoria');
+    const filtroStatus = document.getElementById('filtroStatusDespesa');
     
     // Quando o filtro de categoria mudar, atualizar subcategorias e filtrar tabela
     if (filtroCategoria) {
@@ -335,7 +400,9 @@ document.addEventListener('DOMContentLoaded', function() {
             filtrarTabela();
         });
     }
-    
+    if (filtroStatus) {
+        filtroStatus.addEventListener('change', filtrarTabela);
+    }
     // Quando o filtro de subcategoria mudar, filtrar tabela
     if (filtroSubcategoria) {
         filtroSubcategoria.addEventListener('change', function() {
@@ -374,6 +441,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         filtrarTabela();
     }, 200);
+    // adicionar listener para atualizar total quando os inputs mudarem
+    document.querySelectorAll('input.valor-input').forEach(inp => inp.addEventListener('change', filtrarTabela));
     
     // Event listeners para atualização do parcelamento
     const parcelamentoInput = document.getElementById('parcelamentoDespesa');
@@ -459,27 +528,31 @@ function atualizarInfoParcelamento() {
 
 function salvarDespesa() {
     const descricao = document.getElementById('descricaoDespesa').value;
-    const valor = document.getElementById('valorDespesa').value;
+    const valorPrevisto = document.getElementById('valorPrevistoDespesa').value;
+    const valorEfetivo = document.getElementById('valorDespesa').value;
     const data = document.getElementById('dataDespesa').value;
     const categoriaSelect = document.getElementById('categoriaDespesa');
     const categoria = categoriaSelect.value;
     const categoriaNome = categoriaSelect.options[categoriaSelect.selectedIndex]?.dataset?.nome || categoriaSelect.options[categoriaSelect.selectedIndex]?.text;
     const subcategoria = document.getElementById('subcategoriaDespesa').value;
     const parcelas = parseInt(document.getElementById('parcelamentoDespesa').value) || 1;
+    const efetivado = document.getElementById('efetivoDespesa').checked;
 
-    if (!descricao || !valor || !data || !categoria) {
+    if (!descricao || !valorPrevisto || !data || !categoria) {
         alert('Por favor, preencha todos os campos obrigatórios.');
         return;
     }
     
     const dados = {
         descricao: descricao,
-        valor: parseFloat(valor),
+        valor_previsto: parseFloat(valorPrevisto),
+        valor: valorEfetivo ? parseFloat(valorEfetivo) : null,
         data: data,
         categoria: categoriaNome,
         subcategoria: subcategoria || null,
         tipo_pagamento_id: document.getElementById('tipoPagamentoDespesa').value || null,
-        parcelas: parcelas
+        parcelas: parcelas,
+        efetivado: efetivado
     };
     
     fetch('/api/despesa', {
@@ -506,6 +579,124 @@ function salvarDespesa() {
         console.error('Erro:', error);
         alert('Erro ao salvar despesa.');
     });
+}
+
+// Função para atualizar o valor de uma despesa
+async function atualizarValorDespesa(input) {
+    const id = input.dataset.id;
+    const novoValor = parseFloat(input.value);
+    const valorOriginal = parseFloat(input.dataset.original);
+    const compraParceladaId = input.dataset.compraParcelada;
+    
+    if (isNaN(novoValor) || novoValor < 0) {
+        input.value = input.dataset.original;
+        mostrarNotificacao('Valor inválido!', 'danger');
+        return;
+    }
+    
+    if (novoValor === valorOriginal) {
+        return;
+    }
+    
+    if (compraParceladaId) {
+        const atualizarTodas = confirm('Esta é uma despesa parcelada. Deseja atualizar todas as parcelas proporcionalmente?');
+        
+        try {
+            const checkbox = document.getElementById(`statusDespesa${id}`);
+            const resultado = await atualizarDespesa(id, novoValor, checkbox.checked, compraParceladaId, atualizarTodas);
+            
+            if (resultado.success) {
+                input.dataset.original = novoValor;
+                mostrarNotificacao(resultado.message, 'success');
+                filtrarTabela();
+            }
+        } catch (error) {
+            input.value = input.dataset.original;
+            mostrarNotificacao('Erro ao atualizar valor!', 'danger');
+        }
+    } else {
+        try {
+            const checkbox = document.getElementById(`statusDespesa${id}`);
+            const resultado = await atualizarDespesa(id, novoValor, checkbox.checked);
+            
+            if (resultado.success) {
+                input.dataset.original = novoValor;
+                mostrarNotificacao(resultado.message, 'success');
+                filtrarTabela();
+            }
+        } catch (error) {
+            input.value = input.dataset.original;
+            mostrarNotificacao('Erro ao atualizar valor!', 'danger');
+        }
+    }
+}
+
+// Função para alternar o status (previsto/efetivado) de uma despesa
+async function alternarStatusDespesa(checkbox, id, temValor) {
+    const efetivado = checkbox.checked;
+    const compraParceladaId = checkbox.dataset.compraParcelada;
+    
+    if (compraParceladaId) {
+        const atualizarTodas = confirm('Esta é uma despesa parcelada. Deseja atualizar o status de todas as parcelas?');
+        
+        try {
+            const input = document.querySelector(`input[data-id="${id}"]`);
+            const valor = parseFloat(input.value);
+            
+            const resultado = await atualizarDespesa(id, valor, efetivado, compraParceladaId, atualizarTodas);
+            
+            if (resultado.success) {
+                input.value = resultado.data.valor;
+                input.dataset.original = resultado.data.valor;
+                
+                // Atualizar badge de status
+                const label = checkbox.nextElementSibling;
+                const badge = label.querySelector('.badge');
+                if (resultado.data.efetivado) {
+                    badge.className = 'badge bg-success';
+                    badge.textContent = 'Pago';
+                } else {
+                    badge.className = 'badge bg-warning text-dark';
+                    badge.textContent = 'Pendente';
+                }
+                
+                mostrarNotificacao(resultado.message, 'success');
+                filtrarTabela();
+            }
+        } catch (error) {
+            checkbox.checked = !efetivado;
+            mostrarNotificacao('Erro ao atualizar status!', 'danger');
+        }
+    } else {
+        try {
+            const input = document.querySelector(`input[data-id="${id}"]`);
+            const valor = parseFloat(input.value);
+            
+            const resultado = await atualizarDespesa(id, valor, efetivado);
+            
+            if (resultado.success) {
+                input.value = resultado.data.valor;
+                input.dataset.original = resultado.data.valor;
+                
+                // Atualizar badge de status
+                const label = checkbox.nextElementSibling;
+                const badge = label.querySelector('.badge');
+                if (resultado.data.efetivado) {
+                    badge.className = 'badge bg-success';
+                    badge.textContent = 'Pago';
+                } else {
+                    badge.className = 'badge bg-warning text-dark';
+                    badge.textContent = 'Pendente';
+                }
+                
+                mostrarNotificacao(resultado.message, 'success');
+                filtrarTabela();
+            }
+        } catch (error) {
+            checkbox.checked = !efetivado;
+            mostrarNotificacao('Erro ao atualizar status!', 'danger');
+        }
+    }
 }
 
 function deletarDespesa(id, compraParceladaId) {

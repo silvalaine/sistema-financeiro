@@ -28,9 +28,11 @@ class Usuario(db.Model):
 class Receita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     descricao = db.Column(db.String(200), nullable=False)
-    valor = db.Column(db.Float, nullable=False)
+    valor = db.Column(db.Float, nullable=False, default=0.0)  # Valor efetivo (manter not null, usar 0 como padrão)
+    valor_previsto = db.Column(db.Float, nullable=False)  # Valor previsto é obrigatório
     data = db.Column(db.Date, nullable=False)
     categoria = db.Column(db.String(100))
+    efetivado = db.Column(db.Boolean, default=False)  # True quando o valor foi realmente recebido
 
 class CategoriaDespesa(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -54,7 +56,8 @@ class TipoPagamento(db.Model):
 class Despesa(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     descricao = db.Column(db.String(200), nullable=False)
-    valor = db.Column(db.Float, nullable=False)
+    valor = db.Column(db.Float, nullable=False, default=0.0)  # Valor efetivo (manter not null, usar 0 como padrão)
+    valor_previsto = db.Column(db.Float, nullable=False)  # Valor previsto é obrigatório
     data = db.Column(db.Date, nullable=False)
     categoria = db.Column(db.String(100))
     subcategoria = db.Column(db.String(100))
@@ -62,3 +65,4 @@ class Despesa(db.Model):
     parcela_atual = db.Column(db.Integer, default=1)
     compra_parcelada_id = db.Column(db.Integer, nullable=True)
     tipo_pagamento_id = db.Column(db.Integer, db.ForeignKey('tipo_pagamento.id'))
+    efetivado = db.Column(db.Boolean, default=False)  # True quando o pagamento foi realmente efetuado  # True quando o pagamento foi realmente efetuado

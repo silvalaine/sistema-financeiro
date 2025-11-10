@@ -109,6 +109,42 @@ async function enviarDados(url, dados, metodo = 'POST') {
     }
 }
 
+// Função para atualizar valor e status de um item
+async function atualizarItem(tipo, id, dados) {
+    try {
+        const resultado = await enviarDados(`/api/${tipo}/${id}`, dados, 'PUT');
+        // Mostrar notificação, mas não recarregar a página automaticamente
+        mostrarNotificacao(resultado.message, 'success');
+        return resultado;
+    } catch (error) {
+        // Erro já tratado na função enviarDados
+        throw error;
+    }
+}
+
+// Função para atualizar valor e status de uma despesa
+async function atualizarDespesa(id, valor, efetivado, compraParceladaId = null, atualizarTodasParcelas = false) {
+    const dados = {
+        valor: valor,
+        efetivado: efetivado
+    };
+    
+    if (compraParceladaId) {
+        dados.compra_parcelada_id = compraParceladaId;
+        dados.atualizar_todas_parcelas = atualizarTodasParcelas;
+    }
+    
+    return await atualizarItem('despesa', id, dados);
+}
+
+// Função para atualizar valor e status de uma receita
+async function atualizarReceita(id, valor, efetivado) {
+    return await atualizarItem('receita', id, {
+        valor: valor,
+        efetivado: efetivado
+    });
+}
+
 // Função para deletar item
 async function deletarItem(url, id, callback) {
     if (!confirmarExclusao()) {

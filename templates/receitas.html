@@ -23,11 +23,25 @@
                         </label>
                         <select class="form-select" id="filtroCategoria">
                             <option value="">Todas as categorias</option>
-                            <option value="Salário">Salário</option>
-                            <option value="Freelance">Freelance</option>
-                            <option value="Investimentos">Investimentos</option>
-                            <option value="Vendas">Vendas</option>
-                            <option value="Outros">Outros</option>
+                            {% set categorias = [] %}
+                            {% for receita in receitas %}
+                                {% if receita.categoria not in categorias %}
+                                    {% set _ = categorias.append(receita.categoria) %}
+                                {% endif %}
+                            {% endfor %}
+                            {% for categoria in categorias|sort %}
+                                <option value="{{ categoria }}">{{ categoria }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="filtroStatusReceita" class="form-label">
+                            <i class="fas fa-filter me-2"></i>Status
+                        </label>
+                        <select class="form-select" id="filtroStatusReceita">
+                            <option value="">Todos</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="efetivado">Recebido</option>
                         </select>
                     </div>
                     <div class="col-md-4">
@@ -71,9 +85,37 @@
                             {% for receita in receitas %}
                             <tr>
                                 <td>{{ receita.descricao }}</td>
-                                <td class="text-success fw-bold">R$ {{ "%.2f"|format(receita.valor) }}</td>
+                                <td class="fw-bold">
+                                    {% if receita.valor_previsto %}
+                                        <div class="text-muted small">Previsto: R$ {{ "%.2f"|format(receita.valor_previsto) }}</div>
+                                    {% endif %}
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" step="0.01" min="0" 
+                                               class="form-control form-control-sm valor-input"
+                                               value="{{ "%.2f"|format(receita.valor or 0) }}"
+                                               data-id="{{ receita.id }}"
+                                               data-original="{{ "%.2f"|format(receita.valor or 0) }}"
+                                               onchange="atualizarValorReceita(this)">
+                                    </div>
+                                </td>
                                 <td>{{ receita.data.strftime('%d/%m/%Y') }}</td>
-                                <td><span class="badge bg-primary">{{ receita.categoria }}</span></td>
+                                <td>
+                                    <span class="badge bg-primary">{{ receita.categoria }}</span>
+                                    <div class="form-check form-switch d-inline-block ms-2">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="statusReceita{{ receita.id }}"
+                                               {{ 'checked' if receita.efetivado else '' }}
+                                               onchange="alternarStatusReceita(this, {{ receita.id }}, {{ 'true' if receita.valor else 'false' }})">
+                                        <label class="form-check-label" for="statusReceita{{ receita.id }}">
+                                            {% if receita.efetivado %}
+                                                <span class="badge bg-success">Recebido</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark">Pendente</span>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                </td>
                                 <td>
                                     <button class="btn btn-sm btn-danger" onclick="deletarReceita({{ receita.id }})">
                                         <i class="fas fa-trash"></i>
@@ -104,12 +146,23 @@
                         <input type="text" class="form-control" id="descricaoReceita" required>
                     </div>
                     <div class="mb-3">
-                        <label for="valorReceita" class="form-label">Valor</label>
-                        <input type="number" class="form-control" id="valorReceita" step="0.01" min="0" required>
+                        <label for="valorPrevistoReceita" class="form-label">Valor Previsto</label>
+                        <input type="number" class="form-control" id="valorPrevistoReceita" step="0.01" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valorReceita" class="form-label">Valor Efetivo</label>
+                        <input type="number" class="form-control" id="valorReceita" step="0.01" min="0">
+                        <small class="form-text text-muted">Deixe em branco se ainda não foi recebido</small>
                     </div>
                     <div class="mb-3">
                         <label for="dataReceita" class="form-label">Data</label>
                         <input type="date" class="form-control" id="dataReceita" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="efetivoReceita">
+                            <label class="form-check-label" for="efetivoReceita">Receita já recebida?</label>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="categoriaReceita" class="form-label">Categoria</label>
@@ -135,166 +188,297 @@
 
 {% block scripts %}
 <script>
-// Função para filtrar a tabela de receitas
+// Filtragem e total das receitas
 function filtrarTabela() {
     const filtroCategoria = document.getElementById('filtroCategoria');
     const categoriaFiltro = filtroCategoria ? filtroCategoria.value : '';
-    const linhas = document.querySelectorAll('#tabela-receitas tbody tr');
+    const filtroStatus = document.getElementById('filtroStatusReceita');
+    const statusFiltro = filtroStatus ? filtroStatus.value : '';
+    const linhas = document.querySelectorAll('#tabela-receitas tr');
     
-    
+    console.log('=== Iniciando Filtragem ===');
+    console.log('Filtros:', { categoria: categoriaFiltro, status: statusFiltro });
+
     let total = 0;
     let contador = 0;
-    
+
     linhas.forEach(linha => {
+        // Ignora linha de cabeçalho
+        if (!linha.querySelector('td')) return;
+
+        // Pega os elementos da linha
         const categoriaCell = linha.querySelector('td:nth-child(4)');
-        const valorCell = linha.querySelector('td:nth-child(2)');
-        
         if (!categoriaCell) return;
+
+        const categoriaBadge = categoriaCell.querySelector('.badge.bg-primary');
+        const valorInput = linha.querySelector('input.valor-input');
+        const statusBadge = categoriaCell.querySelector('label .badge');
         
-        // Extrair texto da categoria (pode estar dentro de um badge)
-        const categoriaBadge = categoriaCell.querySelector('.badge');
-        const categoriaTexto = categoriaBadge ? categoriaBadge.textContent.trim() : categoriaCell.textContent.trim();
+        if (!categoriaBadge || !valorInput || !statusBadge) {
+            console.log('Linha sem elementos necessários');
+            return;
+        }
+
+        // Pega textos de categoria e status
+        const categoriaTexto = categoriaBadge.textContent.trim();
+        const statusTexto = statusBadge.textContent.trim().toLowerCase();
         
+        // Decide se mostra baseado nos filtros
         let mostrar = true;
         
-        // Filtrar por categoria
-        if (categoriaFiltro && categoriaTexto !== categoriaFiltro) {
-            mostrar = false;
+        // Filtro de categoria
+        if (categoriaFiltro && categoriaFiltro !== '') {
+            if (categoriaTexto !== categoriaFiltro) {
+                mostrar = false;
+                console.log('Linha ocultada por categoria:', categoriaTexto);
+            }
         }
         
-        // Mostrar ou ocultar linha
+        // Filtro de status
+        if (mostrar && statusFiltro) {
+            const esperado = statusFiltro === 'efetivado' ? 'recebido' : 'pendente';
+            if (!statusTexto.includes(esperado)) {
+                mostrar = false;
+                console.log('Linha ocultada por status:', statusTexto);
+            }
+        }
+
+        // Aplica visibilidade
         linha.style.display = mostrar ? '' : 'none';
-        
-        // Calcular total das linhas visíveis
-        if (mostrar && valorCell) {
-            contador++;
-            // Extrair valor da célula
-            const valorTexto = valorCell.textContent.trim();
-            // Procurar por padrão R$ X.XX ou R$ X,XX
-            const match = valorTexto.match(/R\$\s*([\d.,]+)/);
-            if (match) {
-                // Converter para número (substituir vírgula por ponto e remover pontos de milhar)
-                const valorStr = match[1].replace(/\./g, '').replace(',', '.');
-                const valor = parseFloat(valorStr);
-                if (!isNaN(valor)) {
-                    total += valor;
+
+        // Se a linha está visível, processa para o total
+        if (mostrar) {
+            let valorFinal = 0;
+            const valorEfetivo = parseFloat(valorInput.value) || 0;
+
+            if (valorEfetivo > 0) {
+                valorFinal = valorEfetivo;
+                console.log('Usando valor efetivo:', valorFinal);
+            } else {
+                // Tenta pegar valor previsto
+                const previstoEl = linha.querySelector('.text-muted.small');
+                if (previstoEl) {
+                    const texto = previstoEl.textContent;
+                        console.log('Texto valor previsto:', texto);
+                        // Extrai apenas os caracteres numéricos, ponto e vírgula
+                        const numeros = texto.replace(/[^0-9.,]/g, '');
+                        console.log('Números extraídos:', numeros);
+                        // Normalização inteligente:
+                        // - Se houver ',' e '.' assume-se que '.' é separador de milhares e ',' decimal: remove pontos e troca ','->'.'
+                        // - Se houver apenas ',' assume-se que ',' é decimal: troca ','->'.'
+                        // - Se houver apenas '.' assume-se que '.' é decimal (não remover)
+                        let limpo = numeros;
+                        if (limpo.indexOf(',') > -1 && limpo.indexOf('.') > -1) {
+                            limpo = limpo.replace(/\./g, '').replace(',', '.');
+                        } else if (limpo.indexOf(',') > -1) {
+                            limpo = limpo.replace(/\./g, '').replace(',', '.');
+                        } else {
+                            // apenas pontos ou apenas dígitos: manter como está
+                            // porém se houver mais de one dot and length suggests thousands (e.g. '1.000.000'), remove all dots except last
+                            const dots = (limpo.match(/\./g) || []).length;
+                            if (dots > 1) {
+                                // remove all dots (assume they are thousands separators)
+                                limpo = limpo.replace(/\./g, '');
+                            }
+                        }
+                        console.log('Valor limpo:', limpo);
+                        valorFinal = parseFloat(limpo);
+                        if (!isNaN(valorFinal)) {
+                            console.log('Valor previsto parseado:', valorFinal);
+                        } else {
+                            console.log('Erro ao parsear valor previsto');
+                            valorFinal = 0;
+                        }
                 }
+            }
+
+            if (valorFinal > 0) {
+                total += valorFinal;
+                contador++;
+                console.log(`Linha ${contador}: Valor R$ ${valorFinal}`);
             }
         }
     });
-    
-    // Atualizar total e contador na tela
+
+    console.debug('filtrarTabela resultado: total=', total, 'contador=', contador);
     atualizarTotalReceitas(total, contador);
 }
 
-// Função para atualizar o total exibido
 function atualizarTotalReceitas(total, contador) {
     const totalElement = document.getElementById('totalReceitas');
     const contadorElement = document.getElementById('contadorReceitas');
-    
+
+    // Garante que o total nunca seja negativo e tenha 2 casas decimais
+    total = Math.max(0, Number((total || 0).toFixed(2)));
+
+    console.log('Atualizando display:', {
+        total: total,
+        contador: contador
+    });
+
     if (totalElement) {
-        totalElement.textContent = total.toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        });
+        totalElement.textContent = new Intl.NumberFormat('pt-BR', { 
+            style: 'currency', 
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2 
+        }).format(total);
     }
-    
     if (contadorElement) {
-        contadorElement.textContent = `${contador} receita(s)`;
+        contadorElement.textContent = contador === 1 ? '1 receita' : `${contador} receitas`;
     }
 }
 
-// Função para limpar filtros
 function limparFiltros() {
     const filtroCategoria = document.getElementById('filtroCategoria');
+    const filtroStatus = document.getElementById('filtroStatusReceita');
     if (filtroCategoria) {
         filtroCategoria.value = '';
+        if (filtroStatus) filtroStatus.value = '';
         filtrarTabela();
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Definir data atual como padrão
-    const dataInput = document.getElementById('dataReceita');
-    if (dataInput) {
-        dataInput.value = new Date().toISOString().split('T')[0];
-    }
-    
-    // Filtro de categoria
-    const filtroCategoria = document.getElementById('filtroCategoria');
-    if (filtroCategoria) {
-        filtroCategoria.addEventListener('change', filtrarTabela);
-    }
-    
-    // Calcular total inicial ao carregar a página
-    setTimeout(() => {
-        filtrarTabela();
-    }, 200);
-});
-
+// Salvar nova receita (mantive comportamento original: recarrega após salvar)
 function salvarReceita() {
     const descricao = document.getElementById('descricaoReceita').value;
-    const valor = document.getElementById('valorReceita').value;
+    const valorPrevisto = document.getElementById('valorPrevistoReceita').value;
+    const valorEfetivo = document.getElementById('valorReceita').value;
     const data = document.getElementById('dataReceita').value;
     const categoria = document.getElementById('categoriaReceita').value;
-    
-    if (!descricao || !valor || !data || !categoria) {
-        alert('Por favor, preencha todos os campos.');
+    const efetivado = document.getElementById('efetivoReceita').checked;
+
+    if (!descricao || !valorPrevisto || !data || !categoria) {
+        mostrarNotificacao('Por favor, preencha todos os campos obrigatórios.', 'danger');
         return;
     }
-    
+
     const dados = {
         descricao: descricao,
-        valor: parseFloat(valor),
+        valor_previsto: parseFloat(valorPrevisto),
+        valor: valorEfetivo ? parseFloat(valorEfetivo) : null,
         data: data,
-        categoria: categoria
+        categoria: categoria,
+        efetivado: efetivado
     };
-    
+
     fetch('/api/receita', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dados)
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Fechar modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalReceita'));
-            if (modal) modal.hide();
-            // Recarregar página para atualizar tabela e total
-            location.reload();
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.success) {
+            mostrarNotificacao(resp.message, 'success');
+            setTimeout(() => location.reload(), 800);
         } else {
-            alert('Erro: ' + data.message);
+            mostrarNotificacao('Erro: ' + (resp.message || 'Não foi possível salvar'), 'danger');
         }
     })
-    .catch(error => {
-        console.error('Erro:', error);
-        alert('Erro ao salvar receita.');
-    });
+    .catch(() => mostrarNotificacao('Erro ao salvar receita.', 'danger'));
+}
+
+// Atualizar valor/efetivado via API
+async function atualizarValorReceita(input) {
+    const id = input.dataset.id;
+    const novoValor = parseFloat(input.value);
+    const valorOriginal = parseFloat(input.dataset.original);
+
+    if (isNaN(novoValor) || novoValor < 0) {
+        input.value = input.dataset.original;
+        mostrarNotificacao('Valor inválido!', 'danger');
+        return;
+    }
+    if (novoValor === valorOriginal) return;
+
+    try {
+        const checkbox = document.getElementById(`statusReceita${id}`);
+        const resultado = await atualizarReceita(id, novoValor, checkbox ? checkbox.checked : false);
+        if (resultado && resultado.success) {
+            input.dataset.original = novoValor;
+            mostrarNotificacao(resultado.message, 'success');
+            filtrarTabela();
+        } else if (resultado && !resultado.success) {
+            mostrarNotificacao(resultado.message || 'Erro', 'danger');
+        }
+    } catch (e) {
+        input.value = input.dataset.original;
+        mostrarNotificacao('Erro ao atualizar valor!', 'danger');
+    }
+}
+
+async function alternarStatusReceita(checkbox, id) {
+    const efetivado = checkbox.checked;
+    try {
+        const input = document.querySelector(`input[data-id="${id}"]`);
+        const valor = input ? parseFloat(input.value) : 0;
+        const resultado = await atualizarReceita(id, valor, efetivado);
+        if (resultado && resultado.success) {
+            if (input) {
+                input.value = resultado.data.valor;
+                input.dataset.original = resultado.data.valor;
+            }
+            const label = checkbox.nextElementSibling;
+            const badge = label ? label.querySelector('.badge') : null;
+            if (badge) {
+                if (resultado.data.efetivado) {
+                    badge.className = 'badge bg-success';
+                    badge.textContent = 'Recebido';
+                } else {
+                    badge.className = 'badge bg-warning text-dark';
+                    badge.textContent = 'Pendente';
+                }
+            }
+            mostrarNotificacao(resultado.message, 'success');
+            filtrarTabela();
+        } else {
+            mostrarNotificacao(resultado.message || 'Erro', 'danger');
+            checkbox.checked = !efetivado;
+        }
+    } catch (e) {
+        checkbox.checked = !efetivado;
+        mostrarNotificacao('Erro ao atualizar status!', 'danger');
+    }
 }
 
 function deletarReceita(id) {
-    if (confirm('Tem certeza que deseja deletar esta receita?')) {
-        fetch(`/api/receita/${id}`, {
-            method: 'DELETE'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                location.reload();
+    if (!confirm('Tem certeza que deseja deletar esta receita?')) return;
+    fetch(`/api/receita/${id}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.success) {
+                mostrarNotificacao(resp.message, 'success');
+                setTimeout(() => location.reload(), 800);
             } else {
-                alert('Erro: ' + data.message);
+                mostrarNotificacao('Erro: ' + (resp.message || 'Não foi possível deletar'), 'danger');
             }
         })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao deletar receita.');
-        });
-    }
+        .catch(() => mostrarNotificacao('Erro ao deletar receita!', 'danger'));
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // definir data padrão
+    const dataInput = document.getElementById('dataReceita');
+    if (dataInput) dataInput.value = new Date().toISOString().split('T')[0];
+
+    // filtro de categoria
+    const filtroCategoria = document.getElementById('filtroCategoria');
+    if (filtroCategoria) filtroCategoria.addEventListener('change', filtrarTabela);
+    const filtroStatus = document.getElementById('filtroStatusReceita');
+    if (filtroStatus) filtroStatus.addEventListener('change', filtrarTabela);
+
+    // listeners nos campos de valor e nos switches
+    document.querySelectorAll('input.valor-input').forEach(input => {
+        input.addEventListener('change', () => atualizarValorReceita(input));
+    });
+    document.querySelectorAll('input[id^="statusReceita"]').forEach(chk => {
+        const id = chk.id.replace('statusReceita','');
+        chk.addEventListener('change', () => alternarStatusReceita(chk, id));
+    });
+
+    // cálculo inicial do total
+    filtrarTabela();
+});
 </script>
 {% endblock %}

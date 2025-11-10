@@ -113,6 +113,15 @@
                             </select>
                         </div>
 
+                        <div class="input-group input-group-sm" style="max-width: 150px;">
+                            <span class="input-group-text">Status</span>
+                            <select id="filtroStatusRelatorio" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="efetivado">Efetivado</option>
+                            </select>
+                        </div>
+
                         <div class="btn-group">
                             <button type="submit" class="btn btn-sm btn-primary" id="btnAplicarFiltro">
                                 <i class="fas fa-filter me-1"></i>Aplicar
@@ -223,6 +232,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const filtroStatusRelatorio = document.getElementById('filtroStatusRelatorio');
+    if (filtroStatusRelatorio) {
+        filtroStatusRelatorio.addEventListener('change', function() { carregarRelatorios(); });
+    }
+
     // Adicionar event listeners para os campos de data
     const filtroDataInicio = document.getElementById('filtroDataInicio');
     const filtroDataFim = document.getElementById('filtroDataFim');
@@ -253,6 +267,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('filtroDataFim').value = '';
         const filtroTipoPagamento = document.getElementById('filtroTipoPagamento');
         if (filtroTipoPagamento) filtroTipoPagamento.value = '';
+        const filtroStatusRelatorio = document.getElementById('filtroStatusRelatorio');
+        if (filtroStatusRelatorio) filtroStatusRelatorio.value = '';
         carregarRelatorios();
     });
 
@@ -281,6 +297,8 @@ function carregarRelatorios() {
     if (filtroDataFim && filtroDataFim.value) params.append('data_fim', filtroDataFim.value);
     const filtroTipoPagamento = document.getElementById('filtroTipoPagamento');
     if (filtroTipoPagamento && filtroTipoPagamento.value) params.append('tipo_pagamento_id', filtroTipoPagamento.value);
+    const filtroStatusRelatorio = document.getElementById('filtroStatusRelatorio');
+    if (filtroStatusRelatorio && filtroStatusRelatorio.value) params.append('status', filtroStatusRelatorio.value);
     const url = '/api/relatorios/resumo' + (params.toString() ? ('?' + params.toString()) : '');
 
     fetch(url)

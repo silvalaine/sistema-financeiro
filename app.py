@@ -195,16 +195,30 @@ def relatorio_resumo():
         subcategoria = request.args.get('subcategoria')
         data_inicio = request.args.get('data_inicio')
         data_fim = request.args.get('data_fim')
+        status = request.args.get('status')
         tipo_pagamento_id = request.args.get('tipo_pagamento_id')
+
+        # Parse date filters to date objects when provided
+        data_inicio_obj = None
+        data_fim_obj = None
+        if data_inicio:
+            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_fim:
+            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
 
         # Total receitas
         receitas_q = db.session.query(func.sum(Receita.valor))
         if categoria:
             receitas_q = receitas_q.filter(Receita.categoria == categoria)
-        if data_inicio:
-            receitas_q = receitas_q.filter(Receita.data >= data_inicio)
-        if data_fim:
-            receitas_q = receitas_q.filter(Receita.data <= data_fim)
+        if data_inicio_obj:
+            receitas_q = receitas_q.filter(Receita.data >= data_inicio_obj)
+        if data_fim_obj:
+            receitas_q = receitas_q.filter(Receita.data <= data_fim_obj)
+        if status:
+            if status == 'efetivado':
+                receitas_q = receitas_q.filter(Receita.efetivado == True)
+            elif status == 'pendente':
+                receitas_q = receitas_q.filter(Receita.efetivado == False)
         total_receitas = receitas_q.scalar() or 0
 
         # Total despesas
@@ -213,14 +227,17 @@ def relatorio_resumo():
             despesas_q = despesas_q.filter(Despesa.categoria == categoria)
         if subcategoria:
             despesas_q = despesas_q.filter(Despesa.subcategoria == subcategoria)
-        if data_inicio:
-            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_inicio_obj:
             despesas_q = despesas_q.filter(Despesa.data >= data_inicio_obj)
-        if data_fim:
-            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+        if data_fim_obj:
             despesas_q = despesas_q.filter(Despesa.data <= data_fim_obj)
         if tipo_pagamento_id:
             despesas_q = despesas_q.filter(Despesa.tipo_pagamento_id == int(tipo_pagamento_id))
+        if status:
+            if status == 'efetivado':
+                despesas_q = despesas_q.filter(Despesa.efetivado == True)
+            elif status == 'pendente':
+                despesas_q = despesas_q.filter(Despesa.efetivado == False)
         total_despesas = despesas_q.scalar() or 0
 
         # Saldo atual
@@ -233,12 +250,15 @@ def relatorio_resumo():
         )
         if categoria:
             receitas_categoria_q = receitas_categoria_q.filter(Receita.categoria == categoria)
-        if data_inicio:
-            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_inicio_obj:
             receitas_categoria_q = receitas_categoria_q.filter(Receita.data >= data_inicio_obj)
-        if data_fim:
-            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+        if data_fim_obj:
             receitas_categoria_q = receitas_categoria_q.filter(Receita.data <= data_fim_obj)
+        if status:
+            if status == 'efetivado':
+                receitas_categoria_q = receitas_categoria_q.filter(Receita.efetivado == True)
+            elif status == 'pendente':
+                receitas_categoria_q = receitas_categoria_q.filter(Receita.efetivado == False)
         receitas_categoria = receitas_categoria_q.group_by(Receita.categoria).all()
 
         # Despesas por categoria
@@ -250,12 +270,15 @@ def relatorio_resumo():
             despesas_categoria_q = despesas_categoria_q.filter(Despesa.categoria == categoria)
         if subcategoria:
             despesas_categoria_q = despesas_categoria_q.filter(Despesa.subcategoria == subcategoria)
-        if data_inicio:
-            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_inicio_obj:
             despesas_categoria_q = despesas_categoria_q.filter(Despesa.data >= data_inicio_obj)
-        if data_fim:
-            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+        if data_fim_obj:
             despesas_categoria_q = despesas_categoria_q.filter(Despesa.data <= data_fim_obj)
+        if status:
+            if status == 'efetivado':
+                despesas_categoria_q = despesas_categoria_q.filter(Despesa.efetivado == True)
+            elif status == 'pendente':
+                despesas_categoria_q = despesas_categoria_q.filter(Despesa.efetivado == False)
         if tipo_pagamento_id:
             despesas_categoria_q = despesas_categoria_q.filter(Despesa.tipo_pagamento_id == int(tipo_pagamento_id))
         despesas_categoria = despesas_categoria_q.group_by(Despesa.categoria).all()
@@ -264,12 +287,15 @@ def relatorio_resumo():
         ultimas_receitas_q = db.session.query(Receita).order_by(Receita.data.desc())
         if categoria:
             ultimas_receitas_q = ultimas_receitas_q.filter(Receita.categoria == categoria)
-        if data_inicio:
-            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_inicio_obj:
             ultimas_receitas_q = ultimas_receitas_q.filter(Receita.data >= data_inicio_obj)
-        if data_fim:
-            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+        if data_fim_obj:
             ultimas_receitas_q = ultimas_receitas_q.filter(Receita.data <= data_fim_obj)
+        if status:
+            if status == 'efetivado':
+                ultimas_receitas_q = ultimas_receitas_q.filter(Receita.efetivado == True)
+            elif status == 'pendente':
+                ultimas_receitas_q = ultimas_receitas_q.filter(Receita.efetivado == False)
         ultimas_receitas = ultimas_receitas_q.limit(5).all()
 
         ultimas_despesas_q = db.session.query(Despesa).order_by(Despesa.data.desc())
@@ -277,14 +303,17 @@ def relatorio_resumo():
             ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.categoria == categoria)
         if subcategoria:
             ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.subcategoria == subcategoria)
-        if data_inicio:
-            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+        if data_inicio_obj:
             ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.data >= data_inicio_obj)
-        if data_fim:
-            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+        if data_fim_obj:
             ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.data <= data_fim_obj)
         if tipo_pagamento_id:
             ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.tipo_pagamento_id == int(tipo_pagamento_id))
+        if status:
+            if status == 'efetivado':
+                ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.efetivado == True)
+            elif status == 'pendente':
+                ultimas_despesas_q = ultimas_despesas_q.filter(Despesa.efetivado == False)
         ultimas_despesas = ultimas_despesas_q.limit(5).all()
         
         return jsonify({
@@ -293,8 +322,8 @@ def relatorio_resumo():
             'saldo_atual': saldo_atual,
             'receitas_categoria': [{'categoria': r.categoria, 'total': r.total} for r in receitas_categoria],
             'despesas_categoria': [{'categoria': d.categoria, 'total': d.total} for d in despesas_categoria],
-            'ultimas_receitas': [{'descricao': r.descricao, 'valor': r.valor, 'data': r.data.strftime('%d/%m/%Y'), 'categoria': r.categoria} for r in ultimas_receitas],
-            'ultimas_despesas': [{'descricao': d.descricao, 'valor': d.valor, 'data': d.data.strftime('%d/%m/%Y'), 'categoria': d.categoria, 'subcategoria': d.subcategoria} for d in ultimas_despesas]
+            'ultimas_receitas': [{'descricao': r.descricao, 'valor': r.valor, 'data': r.data.strftime('%d/%m/%Y'), 'categoria': r.categoria, 'efetivado': bool(r.efetivado)} for r in ultimas_receitas],
+            'ultimas_despesas': [{'descricao': d.descricao, 'valor': d.valor, 'data': d.data.strftime('%d/%m/%Y'), 'categoria': d.categoria, 'subcategoria': d.subcategoria, 'efetivado': bool(d.efetivado)} for d in ultimas_despesas]
         })
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -324,12 +353,20 @@ def gerar_relatorio_pdf():
 def adicionar_receita():
     try:
         data = request.get_json()
+        valor_previsto = float(data['valor_previsto'])
+        # Se valor efetivo não foi informado, usa o valor previsto quando efetivado=True, senão usa 0
+        valor = float(data['valor']) if data.get('valor') else (valor_previsto if data.get('efetivado') else 0.0)
+        efetivado = data.get('efetivado', False)
+        
         receita = Receita(
             descricao=data['descricao'],
-            valor=float(data['valor']),
+            valor_previsto=valor_previsto,
+            valor=valor,  # Agora sempre terá um valor (previsto, efetivo ou 0)
             data=datetime.strptime(data['data'], '%Y-%m-%d').date(),
-            categoria=data['categoria']
+            categoria=data['categoria'],
+            efetivado=efetivado
         )
+        
         db.session.add(receita)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Receita adicionada com sucesso!'})
@@ -342,9 +379,13 @@ def adicionar_despesa():
     try:
         data = request.get_json()
         num_parcelas = int(data.get('parcelas', 1))
-        valor_total = float(data['valor'])
-        valor_parcela = round(valor_total / num_parcelas, 2)
+        valor_previsto_total = float(data['valor_previsto'])
+        # Se valor efetivo não foi informado, usa o valor previsto quando efetivado=True, senão usa 0
+        valor_efetivo = float(data['valor']) if data.get('valor') else (valor_previsto_total if data.get('efetivado') else 0.0)
+        valor_previsto_parcela = round(valor_previsto_total / num_parcelas, 2)
+        valor_efetivo_parcela = round(valor_efetivo / num_parcelas, 2)
         data_inicial = datetime.strptime(data['data'], '%Y-%m-%d').date()
+        efetivado = data.get('efetivado', False)
         
         compra_parcelada_id = None
         if num_parcelas > 1:
@@ -354,9 +395,15 @@ def adicionar_despesa():
             data_parcela = data_inicial.replace(year=data_inicial.year + ((data_inicial.month + i) - 1) // 12,
                                            month=((data_inicial.month + i - 1) % 12) + 1)
             
-            valor_desta_parcela = valor_parcela
-            if i == num_parcelas - 1:
-                valor_desta_parcela = round(valor_total - (valor_parcela * (num_parcelas - 1)), 2)
+            # Calcular valor previsto desta parcela
+            valor_previsto_desta = valor_previsto_parcela
+            if i == num_parcelas - 1:  # Ajustar última parcela para evitar centavos
+                valor_previsto_desta = round(valor_previsto_total - (valor_previsto_parcela * (num_parcelas - 1)), 2)
+            
+            # Calcular valor efetivo desta parcela
+            valor_efetivo_desta = valor_efetivo_parcela
+            if i == num_parcelas - 1:  # Ajustar última parcela
+                valor_efetivo_desta = round(valor_efetivo - (valor_efetivo_parcela * (num_parcelas - 1)), 2)
             
             descricao = data['descricao']
             if num_parcelas > 1:
@@ -364,14 +411,16 @@ def adicionar_despesa():
             
             despesa = Despesa(
                 descricao=descricao,
-                valor=valor_desta_parcela,
+                valor_previsto=valor_previsto_desta,
+                valor=valor_efetivo_desta,
                 data=data_parcela,
                 categoria=data['categoria'],
                 subcategoria=data.get('subcategoria'),
                 tipo_pagamento_id=data.get('tipo_pagamento_id'),
                 parcelas=num_parcelas,
                 parcela_atual=i+1,
-                compra_parcelada_id=compra_parcelada_id
+                compra_parcelada_id=compra_parcelada_id,
+                efetivado=efetivado
             )
             db.session.add(despesa)
         
@@ -384,58 +433,126 @@ def adicionar_despesa():
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/api/receita/<int:id>', methods=['DELETE'])
+@app.route('/api/receita/<int:id>', methods=['DELETE', 'PUT'])
 @login_required
-def deletar_receita(id):
+def gerenciar_receita(id):
     try:
         receita = Receita.query.get_or_404(id)
-        db.session.delete(receita)
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Receita deletada com sucesso!'})
+        
+        if request.method == 'DELETE':
+            db.session.delete(receita)
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Receita deletada com sucesso!'})
+        
+        elif request.method == 'PUT':
+            data = request.get_json()
+            if 'efetivado' in data:
+                receita.efetivado = data['efetivado']
+                # Se marcado como efetivado e não tem valor, usa o previsto
+                if receita.efetivado and (not receita.valor or receita.valor == 0):
+                    receita.valor = receita.valor_previsto
+            
+            # Atualiza valor se fornecido
+            if 'valor' in data:
+                receita.valor = float(data['valor'])
+            
+            db.session.commit()
+            return jsonify({
+                'success': True, 
+                'message': 'Receita atualizada com sucesso!',
+                'data': {
+                    'id': receita.id,
+                    'efetivado': receita.efetivado,
+                    'valor': receita.valor,
+                    'valor_previsto': receita.valor_previsto
+                }
+            })
+            
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/api/despesa/<int:id>', methods=['DELETE'])
+@app.route('/api/despesa/<int:id>', methods=['DELETE', 'PUT'])
 @login_required
-def deletar_despesa(id):
+def gerenciar_despesa(id):
     try:
         despesa = Despesa.query.get_or_404(id)
-        compra_parcelada_id = request.args.get('compra_parcelada_id')
-        opcao_delete = request.args.get('opcao_delete')
-
-        if compra_parcelada_id and opcao_delete:
-            compra_parcelada_id = int(compra_parcelada_id)
+        
+        if request.method == 'DELETE':
+            compra_parcelada_id = request.args.get('compra_parcelada_id')
+            opcao_delete = request.args.get('opcao_delete')
             
-            if opcao_delete == '1':  # Deletar apenas esta parcela
+            if compra_parcelada_id and opcao_delete:
+                compra_parcelada_id = int(compra_parcelada_id)
+                
+                if opcao_delete == '1':  # Deletar apenas esta parcela
+                    db.session.delete(despesa)
+                    mensagem = 'Parcela deletada com sucesso!'
+                
+                elif opcao_delete == '2':  # Deletar esta e parcelas futuras
+                    parcelas_futuras = Despesa.query.filter(
+                        Despesa.compra_parcelada_id == compra_parcelada_id,
+                        Despesa.parcela_atual >= despesa.parcela_atual
+                    ).all()
+                    for p in parcelas_futuras:
+                        db.session.delete(p)
+                    mensagem = f'{len(parcelas_futuras)} parcela(s) futura(s) deletada(s) com sucesso!'
+                
+                elif opcao_delete == '3':  # Deletar todas as parcelas
+                    todas_parcelas = Despesa.query.filter_by(
+                        compra_parcelada_id=compra_parcelada_id
+                    ).all()
+                    for p in todas_parcelas:
+                        db.session.delete(p)
+                    mensagem = f'Todas as {len(todas_parcelas)} parcela(s) foram deletadas com sucesso!'
+                
+                else:
+                    return jsonify({'success': False, 'message': 'Opção inválida!'})
+            
+            else:  # Despesa normal (não parcelada)
                 db.session.delete(despesa)
-                mensagem = 'Parcela deletada com sucesso!'
+                mensagem = 'Despesa deletada com sucesso!'
             
-            elif opcao_delete == '2':  # Deletar esta e parcelas futuras
-                parcelas_futuras = Despesa.query.filter(
-                    Despesa.compra_parcelada_id == compra_parcelada_id,
-                    Despesa.parcela_atual >= despesa.parcela_atual
-                ).all()
-                for p in parcelas_futuras:
-                    db.session.delete(p)
-                mensagem = f'{len(parcelas_futuras)} parcela(s) futura(s) deletada(s) com sucesso!'
+            db.session.commit()
+            return jsonify({'success': True, 'message': mensagem})
             
-            elif opcao_delete == '3':  # Deletar todas as parcelas
-                todas_parcelas = Despesa.query.filter_by(
-                    compra_parcelada_id=compra_parcelada_id
-                ).all()
-                for p in todas_parcelas:
-                    db.session.delete(p)
-                mensagem = f'Todas as {len(todas_parcelas)} parcela(s) foram deletadas com sucesso!'
+        elif request.method == 'PUT':
+            data = request.get_json()
+            compra_parcelada_id = data.get('compra_parcelada_id')
             
+            # Se tem ID de compra parcelada, pergunta se quer atualizar todas as parcelas
+            if compra_parcelada_id and data.get('atualizar_todas_parcelas'):
+                despesas = Despesa.query.filter_by(compra_parcelada_id=compra_parcelada_id).all()
+                for d in despesas:
+                    if 'efetivado' in data:
+                        d.efetivado = data['efetivado']
+                        # Se marcado como efetivado e não tem valor, usa o previsto
+                        if d.efetivado and (not d.valor or d.valor == 0):
+                            d.valor = d.valor_previsto
+                    if 'valor' in data:
+                        # Calcula proporcionalmente baseado no valor_previsto
+                        proporcao = d.valor_previsto / despesa.valor_previsto if despesa.valor_previsto != 0 else 0
+                        d.valor = float(data['valor']) * proporcao
             else:
-                return jsonify({'success': False, 'message': 'Opção inválida!'})
-        
-        else:  # Despesa normal (não parcelada)
-            db.session.delete(despesa)
-            mensagem = 'Despesa deletada com sucesso!'
-        
-        db.session.commit()
-        return jsonify({'success': True, 'message': mensagem})
+                # Atualiza apenas a despesa atual
+                if 'efetivado' in data:
+                    despesa.efetivado = data['efetivado']
+                    # Se marcado como efetivado e não tem valor, usa o previsto
+                    if despesa.efetivado and (not despesa.valor or despesa.valor == 0):
+                        despesa.valor = despesa.valor_previsto
+                if 'valor' in data:
+                    despesa.valor = float(data['valor'])
+            
+            db.session.commit()
+            return jsonify({
+                'success': True, 
+                'message': 'Despesa atualizada com sucesso!',
+                'data': {
+                    'id': despesa.id,
+                    'efetivado': despesa.efetivado,
+                    'valor': despesa.valor,
+                    'valor_previsto': despesa.valor_previsto
+                }
+            })
     
     except Exception as e:
         db.session.rollback()
@@ -552,36 +669,60 @@ def obter_tipos_pagamento():
         return jsonify({'error': str(e)})
 
 def _ensure_columns():
-    """Verifica se todas as colunas necessárias existem na tabela `despesa` e as adiciona se necessário."""
+    """Verifica se todas as colunas necessárias existem nas tabelas e as adiciona se necessário."""
     try:
         inspector = inspect(db.engine)
+        
+        # Colunas para a tabela despesa
         if 'despesa' in inspector.get_table_names():
-            cols = [c['name'] for c in inspector.get_columns('despesa')]
-            
-            colunas = {
+            cols_despesa = [c['name'] for c in inspector.get_columns('despesa')]
+            colunas_despesa = {
                 'subcategoria': 'VARCHAR(100)',
                 'parcelas': 'INTEGER DEFAULT 1',
                 'parcela_atual': 'INTEGER DEFAULT 1',
                 'compra_parcelada_id': 'INTEGER',
-                'tipo_pagamento_id': 'INTEGER'
+                'tipo_pagamento_id': 'INTEGER',
+                'valor_previsto': 'FLOAT',
+                'efetivado': 'BOOLEAN DEFAULT 0'
             }
             
-            for col_name, col_type in colunas.items():
-                if col_name not in cols:
+            for col_name, col_type in colunas_despesa.items():
+                if col_name not in cols_despesa:
                     with db.engine.begin() as conn:
                         conn.execute(text(f"ALTER TABLE despesa ADD COLUMN {col_name} {col_type}"))
                     print(f"Coluna '{col_name}' adicionada na tabela 'despesa'.")
+                    
+                    # Se for coluna valor_previsto, copiar valor inicial da coluna valor
+                    if col_name == 'valor_previsto':
+                        with db.engine.begin() as conn:
+                            conn.execute(text("UPDATE despesa SET valor_previsto = valor WHERE valor_previsto IS NULL"))
             
-            if 'tipo_pagamento_id' in cols:
+            if 'tipo_pagamento_id' in cols_despesa:
                 try:
                     with db.engine.begin() as conn:
                         conn.execute(text("DROP INDEX IF EXISTS ix_despesa_tipo_pagamento_id"))
-                        conn.execute(text("""
-                            CREATE INDEX ix_despesa_tipo_pagamento_id 
-                            ON despesa (tipo_pagamento_id)
-                        """))
+                        conn.execute(text("CREATE INDEX ix_despesa_tipo_pagamento_id ON despesa (tipo_pagamento_id)"))
                 except Exception as e:
                     print('Aviso: Falha ao criar índice tipo_pagamento_id:', e)
+        
+        # Colunas para a tabela receita
+        if 'receita' in inspector.get_table_names():
+            cols_receita = [c['name'] for c in inspector.get_columns('receita')]
+            colunas_receita = {
+                'valor_previsto': 'FLOAT',
+                'efetivado': 'BOOLEAN DEFAULT 0'
+            }
+            
+            for col_name, col_type in colunas_receita.items():
+                if col_name not in cols_receita:
+                    with db.engine.begin() as conn:
+                        conn.execute(text(f"ALTER TABLE receita ADD COLUMN {col_name} {col_type}"))
+                    print(f"Coluna '{col_name}' adicionada na tabela 'receita'.")
+                    
+                    # Se for coluna valor_previsto, copiar valor inicial da coluna valor
+                    if col_name == 'valor_previsto':
+                        with db.engine.begin() as conn:
+                            conn.execute(text("UPDATE receita SET valor_previsto = valor WHERE valor_previsto IS NULL"))
                     
     except Exception as e:
         print('Falha ao garantir colunas:', e)
